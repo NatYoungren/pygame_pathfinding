@@ -3,18 +3,20 @@ import pygame as pg
 
 # TODO: Move all constants to a separate file
 
-MANUAL_CONTROL = True
+MANUAL_CONTROL = False
+AUTO_STEPS_PER_SECOND = 100
 
 SCREEN_W, SCREEN_H = 500, 500
 
 BORDER_PX = 1
-GRID_W, GRID_H = 5, 5
+GRID_W, GRID_H = 10, 10
 
 BG_COLOR = (0, 0, 0) # Black
-CELL_COLORS = (255, 240, 240), (240, 240, 255) # Light red, light blue
-SEARCHED_COLORS = (240, 200, 200), (200, 200, 240) # Less light red, less light blue
-FRONTIER_COLORS = (220, 255, 180), (180, 255, 220) # Green tinted red, green tinted blue
+CELL_COLORS = (255, 255, 255), (255, 255, 255) 
+SEARCHED_COLORS = (200, 255, 200), (200, 255, 200)
+FRONTIER_COLORS = (100, 255, 100), (100, 255, 100) # Green tinted red, green tinted blue
 WALL_COLOR = (15, 15, 15) # Dark gray
+PATH_COLOR = (255, 0, 0) # Red
 
 START_COLOR = (100, 150, 100) # Dark green
 END_COLOR = (150, 100, 100) # Dark red
@@ -27,6 +29,7 @@ CELL_W, CELL_H = SCREEN_W / GRID_W, SCREEN_H / GRID_H
 
 COST_GRID = np.full((GRID_W, GRID_H), fill_value=DEFAULT_COST, dtype=np.uint8)
 TRAVEL_GRID = np.full((GRID_W, GRID_H), fill_value=np.inf, dtype=np.float32)
+
 
 
 # Heuristic distance from each tile to the end, (can be precomputed, but not necessary)
@@ -44,9 +47,21 @@ P_GRID = np.full((GRID_W, GRID_H, 2), fill_value=-1, dtype=int)
 # Holds status of each tile, 0 = unvisited, 1 = frontier, -1 = searched
 FRONTIER = np.zeros((GRID_W, GRID_H), dtype=int)
 
+STORED_PATH = []
 
+def reset_grids():
+    COST_GRID.fill(DEFAULT_COST)
+    TRAVEL_GRID.fill(np.inf)
+    H_GRID.fill(np.inf)
+    G_GRID.fill(np.inf)
+    F_GRID.fill(np.inf)
+    P_GRID.fill(-1)
+    FRONTIER.fill(0)
+    STORED_PATH.clear()
 
 def main():
+    step_count = 0
+    reset_grids()
 
     pg.init()
     pg.display.set_caption('Pathfinding')
@@ -54,18 +69,14 @@ def main():
     
     running = True
     searching = False
-    
+    found_end = False
     
     
     start_pos = None
     end_pos = None
     
-                
-    
-    # pg.draw.rect(screen, START_COLOR, (START_POS[0]*CELL_W, START_POS[1]*CELL_H, CELL_W, CELL_H))
-    # pg.draw.rect(screen, END_COLOR, (END_POS[0]*CELL_W, END_POS[1]*CELL_H, CELL_W, CELL_H))
-
-    # Render current state
+    # Timer to step the simulation
+    pg.time.set_timer(pg.USEREVENT+1, 1000//AUTO_STEPS_PER_SECOND)
 
     # Main loop
     while running:
@@ -73,9 +84,13 @@ def main():
         
         set_board(screen)
         
-        draw_walls(screen)
         
         draw_search(screen)
+        
+        draw_walls(screen)
+        
+        
+        draw_path(screen)
         
         draw_start_end(screen, start_pos, end_pos)
         
@@ -92,18 +107,19 @@ def main():
                     running = False
                     
                 # Spacebar steps the simulation if manual control is enabled
-                elif event.key == pg.K_SPACE:
+                elif not found_end and event.key == pg.K_SPACE:
                     if start_pos is None or end_pos is None:
                         print('Please select a start and end position')
                         continue
                     
                     if searching and MANUAL_CONTROL:
-                        step(end_pos=end_pos)
+                        step(end_pos=end_pos, path_var=STORED_PATH)
+                        step_count += 1
+                        if found_end: print('STEPS: ', step_count)
                         continue
                     
                     searching = True
                     
-                    print('Searching...')
                     
                 # R key resets the simulation
                 elif event.key == pg.K_r:
@@ -124,24 +140,39 @@ def main():
                 try:
                     if pg.mouse.get_pressed()[0]:
                         clicked_tile = get_tile(pg.mouse.get_pos())
+                        if clicked_tile == start_pos or clicked_tile == end_pos:
+                            continue
                         COST_GRID[clicked_tile[0], clicked_tile[1]] = WALL_COST
                     if pg.mouse.get_pressed()[2]:
                         clicked_tile = get_tile(pg.mouse.get_pos())
+                        if clicked_tile == start_pos or clicked_tile == end_pos:
+                            continue
                         COST_GRID[clicked_tile[0], clicked_tile[1]] = DEFAULT_COST
                         
                 except AttributeError:
                     pass
+                
+            if not found_end and not MANUAL_CONTROL and searching and event.type == pg.USEREVENT+1:
+                found_end = step(end_pos=end_pos, path_var=STORED_PATH)
+                step_count += 1
+                if found_end: print('STEPS: ', step_count)
         pg.display.flip()
+        
 
 
 def distance_heuristic(pos, end_pos):
+    # Use 1.4 for diagonal distance, 1 for horizontal/vertical
+    # vector = np.abs(np.array(pos) - np.array(end_pos))
+    # return abs(vector[0] - vector[1]) + 1.4 * min(vector)
+    
     return np.sqrt((pos[0] - end_pos[0])**2 + (pos[1] - end_pos[1])**2)
 
 
 def add_to_frontier(pos, end_pos, prev_pos=None):
-    
+
     if pos[0] < 0 or pos[0] >= GRID_W or pos[1] < 0 or pos[1] >= GRID_H:
         return
+    
     if COST_GRID[pos] == WALL_COST:
         return
     
@@ -153,7 +184,7 @@ def add_to_frontier(pos, end_pos, prev_pos=None):
     # Technically we may be recalculating this value, but it's not a big deal
     h = distance_heuristic(pos, end_pos)
     f = g + h
-    print(pos, f, g, h)
+    # print(pos, f, g, h)
     if f < F_GRID[pos]:
         F_GRID[pos] = f
         G_GRID[pos] = g
@@ -165,10 +196,8 @@ def add_to_frontier(pos, end_pos, prev_pos=None):
         if prev_pos is not None:
             P_GRID[pos] = prev_pos
 
-        # FRONTIER[prev_pos] = -1
-    if pos == end_pos:
-        print('Found end position')
-        return
+    
+
     
 
 def add_neighbors_to_frontier(pos, end_pos):
@@ -178,8 +207,6 @@ def add_neighbors_to_frontier(pos, end_pos):
                 continue
             neighbor_pos = (pos[0] + w, pos[1] + h)
             
-            
-            # if FRONTIER[neighbor_pos] == 0:
             add_to_frontier(neighbor_pos, end_pos, pos)
             
 
@@ -194,9 +221,9 @@ def select_next_pos():
 
     
     
-def step(end_pos):
+def step(end_pos, path_var=None):
 
-    print('Stepping...')
+    # print('Stepping...')
     # Implement A* here
     if not any(FRONTIER.flatten() == 1):
         print('No more positions to check')
@@ -205,13 +232,11 @@ def step(end_pos):
     p = select_next_pos()
     print(p)
     add_neighbors_to_frontier(p, end_pos)
-    FRONTIER[p] = -1
-    # k_index = np.argmin(POS_QUEUE.values())
-    # next_pos = list(POS_QUEUE.keys())[k_index]
-    # print(next_pos)
-    # travel_value = POS_QUEUE[next_pos] + COST_GRID[next_pos[0], next_pos[1]] + distance_heuristic(next_pos, end_pos)
-    # TRAVEL_GRID[next_pos[0], next_pos[1]] = travel_value
-    
+    FRONTIER[p] = -1 
+    if path_var is not None:
+        path_var[:] = reconstruct_path(p)
+
+    return p == end_pos
     
     
 # TODO: Consolidate all the draw functions into one
@@ -250,8 +275,20 @@ def draw_search(screen):
 #             if (w, h) in FRONTIER:
 #                 pg.draw.rect(screen, FRONTIER_COLORS[(h + w) % 2], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
 
+def reconstruct_path(pos):
+    # print(pos)
+    path = [pos]
+    while -1 not in P_GRID[pos]:
+        pos = tuple(P_GRID[pos])
+        path.append(pos)
+    return path[::-1]
+
 def draw_path(screen):
-    pass
+    for i, (w, h) in enumerate(STORED_PATH):
+        if i == 0 or i == len(STORED_PATH)-1:
+            pg.draw.rect(screen, (200,0,0), (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
+        else:
+            pg.draw.rect(screen, PATH_COLOR, (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
 
 def get_tile(pos):
     pos = np.array(pos)
