@@ -11,7 +11,7 @@ class A_Star():
                  start_pos:(int, int)=None, end_pos:(int, int)=None,
                  default_cost:int=1, wall_cost:int=-1) -> None:
         
-         # Width and height of grid
+        # Width and height of grid
         self.w, self.h = w, h
         
         # Start and end positions
