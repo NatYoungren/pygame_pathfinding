@@ -5,6 +5,8 @@ import numpy as np
 # TODO: Encapsulate in class for simple resetting/initialization
 
 
+
+
 # Grid size
 GRID_W, GRID_H = 100, 100
 
@@ -51,7 +53,15 @@ def reset_grids():
 
 
 def step(end_pos, path_var=None):
-    # Implement A* here
+    """ Progress pathfinding by one step, selecting and exploring a single cell.
+
+    Args:
+        end_pos (int, int): Position of end cell, for heuristic calculation
+        path_var (list, optional): Will reset path_var and populate with shortest path to chosen cell. Defaults to None.
+
+    Returns:
+        bool: True if end_pos was explored this step, False otherwise
+    """
     if not any(FRONTIER.flatten() == 1):
         print('No more positions to check')
         return
