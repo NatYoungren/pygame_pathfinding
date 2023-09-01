@@ -167,7 +167,6 @@ def distance_heuristic(pos, end_pos):
     
     # return np.sqrt((pos[0] - end_pos[0])**2 + (pos[1] - end_pos[1])**2)
 
-NEGATIVE_COUNT = 0
 def add_to_frontier(pos, end_pos, prev_pos=None):
 
     if pos[0] < 0 or pos[0] >= GRID_W or pos[1] < 0 or pos[1] >= GRID_H:
@@ -186,10 +185,6 @@ def add_to_frontier(pos, end_pos, prev_pos=None):
     f = g + h
     # print(pos, f, g, h)
     if f < F_GRID[pos]:
-        if FRONTIER[pos] == -1:
-            global NEGATIVE_COUNT
-            NEGATIVE_COUNT += 1
-        print(f, F_GRID[pos], FRONTIER[pos])
         F_GRID[pos] = f
         G_GRID[pos] = g
         H_GRID[pos] = h
@@ -301,4 +296,3 @@ def get_tile(pos):
 
 if __name__ == '__main__':
     main()
-    print(NEGATIVE_COUNT)
