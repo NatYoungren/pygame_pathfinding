@@ -6,10 +6,10 @@ import pygame as pg
 MANUAL_CONTROL = False
 AUTO_STEPS_PER_SECOND = 1000
 
-SCREEN_W, SCREEN_H = 1000, 1000
+SCREEN_W, SCREEN_H = 800, 800
 
 BORDER_PX = 1
-GRID_W, GRID_H = 100, 100
+GRID_W, GRID_H = 20, 20
 
 BG_COLOR = (0, 0, 0) # Black
 CELL_COLORS = (255, 255, 255), (255, 255, 255) 
@@ -28,7 +28,7 @@ WALL_COST = 100
 CELL_W, CELL_H = SCREEN_W / GRID_W, SCREEN_H / GRID_H
 
 
-COST_GRID = np.full((GRID_W, GRID_H), fill_value=DEFAULT_COST, dtype=np.uint8)
+COST_GRID = np.full((GRID_W, GRID_H), fill_value=DEFAULT_COST, dtype=int)
 
 # Heuristic distance from each tile to the end, (can be precomputed, but not necessary)
 H_GRID = np.full((GRID_W, GRID_H), fill_value=np.inf, dtype=np.float32)
