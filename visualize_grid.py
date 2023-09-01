@@ -4,33 +4,32 @@ import pygame as pg
 # TODO: Move all constants to a separate file
 
 MANUAL_CONTROL = False
-AUTO_STEPS_PER_SECOND = 100
+AUTO_STEPS_PER_SECOND = 1000
 
-SCREEN_W, SCREEN_H = 500, 500
+SCREEN_W, SCREEN_H = 1000, 1000
 
 BORDER_PX = 1
-GRID_W, GRID_H = 10, 10
+GRID_W, GRID_H = 100, 100
 
 BG_COLOR = (0, 0, 0) # Black
 CELL_COLORS = (255, 255, 255), (255, 255, 255) 
 SEARCHED_COLORS = (200, 255, 200), (200, 255, 200)
 FRONTIER_COLORS = (100, 255, 100), (100, 255, 100) # Green tinted red, green tinted blue
 WALL_COLOR = (15, 15, 15) # Dark gray
-PATH_COLOR = (255, 0, 0) # Red
+PATH_COLOR = (240, 50, 50) # Red
 
-START_COLOR = (100, 150, 100) # Dark green
-END_COLOR = (150, 100, 100) # Dark red
+START_COLOR = (100, 180, 100) # Dark green
+END_COLOR = (180, 80, 180) # Dark purple
 
 DEFAULT_COST = 1
-WALL_COST = 255
+PERMEABLE_WALLS = True
+WALL_COST = 20
 
 CELL_W, CELL_H = SCREEN_W / GRID_W, SCREEN_H / GRID_H
 
 
 COST_GRID = np.full((GRID_W, GRID_H), fill_value=DEFAULT_COST, dtype=np.uint8)
 TRAVEL_GRID = np.full((GRID_W, GRID_H), fill_value=np.inf, dtype=np.float32)
-
-
 
 # Heuristic distance from each tile to the end, (can be precomputed, but not necessary)
 H_GRID = np.full((GRID_W, GRID_H), fill_value=np.inf, dtype=np.float32)
@@ -123,12 +122,12 @@ def main():
                     
                 # R key resets the simulation
                 elif event.key == pg.K_r:
-                    print('r')
+                    print('Resetting...')
                     return main()
             
             elif event.type == pg.MOUSEBUTTONDOWN:
                 clicked_tile = get_tile(event.pos)
-                print(clicked_tile)
+                # print(clicked_tile)
                 if start_pos is None:
                     start_pos = clicked_tile
                     
@@ -173,7 +172,7 @@ def add_to_frontier(pos, end_pos, prev_pos=None):
     if pos[0] < 0 or pos[0] >= GRID_W or pos[1] < 0 or pos[1] >= GRID_H:
         return
     
-    if COST_GRID[pos] == WALL_COST:
+    if not PERMEABLE_WALLS and COST_GRID[pos] == WALL_COST:
         return
     
     if prev_pos is None:
@@ -229,14 +228,13 @@ def step(end_pos, path_var=None):
         print('No more positions to check')
         return
     
-    p = select_next_pos()
-    print(p)
-    add_neighbors_to_frontier(p, end_pos)
-    FRONTIER[p] = -1 
+    next_pos = select_next_pos()
+    add_neighbors_to_frontier(next_pos, end_pos)
+    FRONTIER[next_pos] = -1 # Mark as searched
     if path_var is not None:
-        path_var[:] = reconstruct_path(p)
+        path_var[:] = reconstruct_path(next_pos)
 
-    return p == end_pos
+    return next_pos == end_pos
     
     
 # TODO: Consolidate all the draw functions into one
