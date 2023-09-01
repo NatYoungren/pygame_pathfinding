@@ -8,87 +8,47 @@ AUTO_STEPS_PER_SECOND = 1000
 SCREEN_W, SCREEN_H = 800, 800
 
 BORDER_PX = 1
-GRID_W, GRID_H = 20, 20
 
-BG_COLOR = (0, 0, 0) # Black
+BG_COLOR = (0, 0, 0) # Black, seen in grid lines between cells
 CELL_COLORS = (255, 255, 255), (255, 255, 255) 
-SEARCHED_COLORS = (200, 255, 200), (200, 255, 200)
-FRONTIER_COLORS = (100, 255, 100), (100, 255, 100) # Green tinted red, green tinted blue
+TRAVERSED_COLORS = (200, 255, 200), (200, 255, 200)
+SEARCHED_COLORS = (100, 255, 100), (100, 255, 100) # Green tinted red, green tinted blue
 WALL_COLOR = (15, 15, 15) # Dark gray
-PATH_COLOR = (240, 50, 50) # Red
+PATH_COLORS = (240, 50, 50), (200, 0, 0) # Red, darker red
 
 START_COLOR = (100, 180, 100) # Dark green
 END_COLOR = (180, 80, 180) # Dark purple
 
+
+GRID_W, GRID_H = 20, 20
 DEFAULT_COST = 1
-PERMEABLE_WALLS = False
-WALL_COST = 100
+WALL_COST = -1
 
+astar = A_Star(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST, wall_cost=WALL_COST)
+
+# TODO: Force a square aspect ratio.
 CELL_W, CELL_H = SCREEN_W / GRID_W, SCREEN_H / GRID_H
-
-
-COST_GRID = np.full((GRID_W, GRID_H), fill_value=DEFAULT_COST, dtype=int)
-
-# Heuristic distance from each tile to the end, (can be precomputed, but not necessary)
-H_GRID = np.full((GRID_W, GRID_H), fill_value=np.inf, dtype=np.float32)
-
-# Distance from start to each tile, based on shortest path found so far
-G_GRID = np.full((GRID_W, GRID_H), fill_value=np.inf, dtype=np.float32)
-
-# Sum of G and H
-F_GRID = np.full((GRID_W, GRID_H), fill_value=np.inf, dtype=np.float32)
-
-# Parent of each tile, used to reconstruct path, 1D array
-P_GRID = np.full((GRID_W, GRID_H, 2), fill_value=-1, dtype=int)
-
-# Holds status of each tile, 0 = unvisited, 1 = frontier, -1 = searched
-FRONTIER = np.zeros((GRID_W, GRID_H), dtype=int)
-
 STORED_PATH = []
-
-def reset_grids():
-    COST_GRID.fill(DEFAULT_COST)
-    H_GRID.fill(np.inf)
-    G_GRID.fill(np.inf)
-    F_GRID.fill(np.inf)
-    P_GRID.fill(-1)
-    FRONTIER.fill(0)
-    STORED_PATH.clear()
 
 def main():
     sim = A_Star(w=GRID_W, h=GRID_H)
-    step_count = 0
-    reset_grids()
 
     pg.init()
-    pg.display.set_caption('Pathfinding')
     screen = pg.display.set_mode((SCREEN_W, SCREEN_H))
     
     running = True
     searching = False
-    found_end = False
-    
-    
-    start_pos = None
-    end_pos = None
+
     
     # Timer to step the simulation
     pg.time.set_timer(pg.USEREVENT+1, 1000//AUTO_STEPS_PER_SECOND)
 
     # Main loop
     while running:
-        screen.fill(BG_COLOR)
+        pg.display.set_caption(f'A* Pathfinding: steps: {sim.step_count} ~ length: {sim.path_length}')
         
-        set_board(screen)
-        
-        
-        draw_search(screen, sim)
-        
-        draw_walls(screen, sim)
-        
-        draw_path(screen)
-        
-        draw_start_end(screen, sim.start_pos, sim.end_pos)
+        # Draw current state of pathfinding sim
+        draw_state(screen, sim)
         
         # Handle input events
         for event in pg.event.get():
@@ -103,180 +63,96 @@ def main():
                     running = False
                     
                 # Spacebar steps the simulation if manual control is enabled
-                elif not found_end and event.key == pg.K_SPACE:
+                elif not sim.finished and event.key == pg.K_SPACE:
                     if sim.start_pos is None or sim.end_pos is None:
-                        print('Please select a start and end position')
+                        print('Please select a start and end position.')
                         continue
                     
                     if searching and MANUAL_CONTROL:
-                        found_end, _, STORED_PATH[:] = sim.step()
-                        step_count += 1
-                        if found_end: print('STEPS: ', step_count)
-                        continue
+                        pos = sim.step()
+                        if sim.finished: print(f'Finished in: {sim.step_count} steps. Path had length: {sim.path_length}.')
                     
                     searching = True
-                    
                     
                 # R key resets the simulation
                 elif event.key == pg.K_r:
                     print('Resetting...')
                     return main()
             
+            # On left click, set start/end if they are not yet set
             elif event.type == pg.MOUSEBUTTONDOWN:
                 clicked_tile = get_tile(event.pos)
-                # print(clicked_tile)
                 if sim.start_pos is None:
                     sim.start_pos = clicked_tile
                     
                 elif sim.end_pos is None:
                     sim.end_pos = clicked_tile
-                    sim.add_to_frontier(sim.start_pos)
+                    sim.search_cell(sim.start_pos) # Start searching from start_pos
 
+
+            # TODO: Add realtime wall drawing, allow paths to be cut and altered?
             if not searching and sim.start_pos is not None and sim.end_pos is not None: # Before searching, allow user to place walls
                 try:
-                    if pg.mouse.get_pressed()[0]:
+                    clicks = pg.mouse.get_pressed()
+                    if any(clicks):
                         clicked_tile = get_tile(pg.mouse.get_pos())
+
                         if clicked_tile == sim.start_pos or clicked_tile == sim.end_pos:
                             continue
-                        sim.cost_grid[clicked_tile[0], clicked_tile[1]] = sim.wall_cost
-                    if pg.mouse.get_pressed()[2]:
-                        clicked_tile = get_tile(pg.mouse.get_pos())
-                        if clicked_tile == sim.start_pos or clicked_tile == sim.end_pos:
-                            continue
-                        sim.cost_grid[clicked_tile[0], clicked_tile[1]] = sim.default_cost
                         
+                        if clicks[0]:
+                            sim.cost_grid[clicked_tile[0], clicked_tile[1]] = sim.wall_cost
+                        elif clicks[2]:
+                            sim.cost_grid[clicked_tile[0], clicked_tile[1]] = sim.default_cost
+
                 except AttributeError:
                     pass
                 
-            if not found_end and not MANUAL_CONTROL and searching and event.type == pg.USEREVENT+1:
-                found_end, _, STORED_PATH[:] = sim.step()
-                step_count += 1
-                if found_end: print('STEPS: ', step_count)
+            if not sim.finished and not MANUAL_CONTROL and searching and event.type == pg.USEREVENT+1:
+                pos = sim.step()
+                if sim.finished: print(f'Finished in: {sim.step_count} steps. Path had length: {sim.path_length}.')
+                
         pg.display.flip()
-        
 
 
-def distance_heuristic(pos, end_pos):
-    # Use 1.4 for diagonal distance, 1 for horizontal/vertical # NOTE: Updated to 14 and 10
-    vector = np.abs(np.array(pos) - np.array(end_pos))
-    # NOTE: Estimating and casting to integer vastly reduces recycled cell calculations due to float innacuracy/minute differences
-    return int(10 * abs(vector[0] - vector[1]) + 14 * min(vector))
-    
-    # return np.sqrt((pos[0] - end_pos[0])**2 + (pos[1] - end_pos[1])**2)
-
-def add_to_frontier(pos, end_pos, prev_pos=None):
-
-    if pos[0] < 0 or pos[0] >= GRID_W or pos[1] < 0 or pos[1] >= GRID_H:
-        return
-    
-    if not PERMEABLE_WALLS and COST_GRID[pos] == WALL_COST:
-        return
-    
-    if prev_pos is None:
-        g = 0
-    else:
-        g = G_GRID[prev_pos] + distance_heuristic(pos, prev_pos)*COST_GRID[pos] # TODO: Multiple tile cost by distance_heuristic to add extra diagonal cost
-     
-    # Technically we may be recalculating this value, but it's not a big deal
-    h = distance_heuristic(pos, end_pos)
-    f = g + h
-    # print(pos, f, g, h)
-    if f < F_GRID[pos]:
-        F_GRID[pos] = f
-        G_GRID[pos] = g
-        H_GRID[pos] = h
-        # P_GRID[pos] = prev_pos
-        # NOTE: May need to update the entire chain of children, if one exists
-        FRONTIER[pos] = 1
-        
-        if prev_pos is not None:
-            P_GRID[pos] = prev_pos
-
-    
-
-    
-
-def add_neighbors_to_frontier(pos, end_pos):
-    for w in range(-1, 2):
-        for h in range(-1, 2):
-            if w == 0 and h == 0:
-                continue
-            neighbor_pos = (pos[0] + w, pos[1] + h)
-            
-            add_to_frontier(neighbor_pos, end_pos, pos)
-            
-
-
-def select_next_pos():
-    masked_f = np.ma.masked_where(FRONTIER != 1, F_GRID)
-    masked_h = np.ma.masked_where(masked_f != np.min(masked_f), H_GRID)
-    # print(masked_f, masked_f.shape)
-    # print(masked_h, masked_h.shape)
-    return_pos = np.argmin(masked_h)
-    return tuple(np.unravel_index(return_pos, H_GRID.shape))
-
-    
-    
-def step(end_pos, path_var=None):
-
-    # print('Stepping...')
-    # Implement A* here
-    if not any(FRONTIER.flatten() == 1):
-        print('No more positions to check')
-        return
-    
-    next_pos = select_next_pos()
-    add_neighbors_to_frontier(next_pos, end_pos)
-    FRONTIER[next_pos] = -1 # Mark as searched
-    if path_var is not None:
-        path_var[:] = reconstruct_path(next_pos)
-
-    return next_pos == end_pos
-    
-    
 # TODO: Consolidate all the draw functions into one
-def set_board(screen):
+def draw_state(screen, sim):
+    screen.fill(BG_COLOR) # Seen in grid lines between cells.
+    
     for w in range(GRID_W):
         for h in range(GRID_H):
-            pg.draw.rect(screen, CELL_COLORS[(h + w) % 2], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
-
-def draw_start_end(screen, start_pos=None, end_pos=None):
-    if start_pos is not None:
-        pg.draw.rect(screen, START_COLOR, (start_pos[0]*CELL_W+BORDER_PX, start_pos[1]*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
-    if end_pos is not None:
-        pg.draw.rect(screen, END_COLOR, (end_pos[0]*CELL_W+BORDER_PX, end_pos[1]*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
-
-def draw_walls(screen, sim):
-    for w in range(GRID_W):
-        for h in range(GRID_H):
-            if sim.cost_grid[w, h] == sim.wall_cost:
+             # TODO: Draw impassable tiles as black, shade others as a gradient by cost.
+             
+            if sim.cost_grid[w, h] == sim.wall_cost: # Draw walls.
                 pg.draw.rect(screen, WALL_COLOR, (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
-
-
-
-def draw_search(screen, sim):
-    for w in range(GRID_W):
-        for h in range(GRID_H):
-            if sim.state_grid[w, h] == 1:
-                pg.draw.rect(screen, FRONTIER_COLORS[(h + w) % 2], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
-            elif sim.state_grid[w, h] == -1:
+           
+            elif sim.state_grid[w, h] == 1:          # Draw searched cells.
                 pg.draw.rect(screen, SEARCHED_COLORS[(h + w) % 2], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
+            
+            elif sim.state_grid[w, h] == -1:         # Draw traversed cells.
+                pg.draw.rect(screen, TRAVERSED_COLORS[(h + w) % 2], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
+            
+            else:                                    # Draw empty/unsearched cells.
+                pg.draw.rect(screen, CELL_COLORS[(h + w) % 2], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
 
-def reconstruct_path(pos):
-    # print(pos)
-    path = [pos]
-    while -1 not in P_GRID[pos]:
-        pos = tuple(P_GRID[pos])
-        path.append(pos)
-    return path[::-1]
-
-def draw_path(screen):
-    for i, (w, h) in enumerate(STORED_PATH):
-        if i == 0 or i == len(STORED_PATH)-1:
-            pg.draw.rect(screen, (200,0,0), (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
+    # Draw the last traversed path.
+    for i, (w, h) in enumerate(sim.last_path):
+        if i == 0 or i == len(sim.last_path)-1:
+            # First and last cells are drawn slightly darker (usually covered by start/end cells, so this could be skipped)
+            pg.draw.rect(screen, PATH_COLORS[1], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
         else:
-            pg.draw.rect(screen, PATH_COLOR, (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
+            pg.draw.rect(screen, PATH_COLORS[0], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
+    
+    # Draw start cell.
+    if sim.start_pos is not None:
+        pg.draw.rect(screen, START_COLOR, (sim.start_pos[0]*CELL_W+BORDER_PX, sim.start_pos[1]*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
+    
+    # Draw end cell.
+    if sim.end_pos is not None:
+        pg.draw.rect(screen, END_COLOR, (sim.end_pos[0]*CELL_W+BORDER_PX, sim.end_pos[1]*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
 
+
+# TODO: Update to account for possible screen bordering around simulation area.
 def get_tile(pos):
     pos = np.array(pos)
     np.clip(pos[:1], 0, SCREEN_W-1, out=pos[:1])

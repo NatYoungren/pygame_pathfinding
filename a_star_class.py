@@ -2,6 +2,8 @@ import numpy as np
 
 # TODO: Implement non-grid version of A* (i.e. for a continuous space or graph)
 # TODO: Implement teleportation to allow for non-grid movement (i.e. portals), must be factored into heuristic calculation
+# TODO: f_grid is entirely derived, and it may be more flexible to add g and h whenever an f value is needed.
+# TODO: Use numba to optimize speed?
 
 class A_Star():
     
@@ -24,7 +26,7 @@ class A_Star():
         # # #
         # These vars are all set to an (w, h) array of their respective values in reset()
         #
-        self.state_grid = None  # Holds status of each tile, 0 = unvisited, 1 = searchable, -1 = searched
+        self.state_grid = None  # Holds status of each tile, 0 = unsearched, 1 = searched, -1 = traversed
         self.cost_grid = None   # Cost to travel through each tile, used to define terrain
         self.h_grid = None      # Heuristic distance from each tile to the end, (could be precomputed)
         self.g_grid = None      # Distance from start to each tile, based on shortest path found so far
@@ -33,12 +35,15 @@ class A_Star():
         # # #
         
         self.step_count = 0
+        self.last_path = []
+        self.path_length = 0
+        self.finished = False
         
         self.reset()
 
 
     def reset(self):
-        """ Set all grids/counters to default values.
+        """ Set all grids/vars to default values.
                 Will be used to initialize and reset between searches.
                 Max integer value is a stand-in for infinity.
         """
@@ -49,45 +54,55 @@ class A_Star():
         self.f_grid = np.full((self.w, self.h), fill_value=np.iinfo(int).max, dtype=int)
         self.p_grid = np.full((self.w, self.h, 2), fill_value=-1, dtype=int)
         self.step_count = 0
+        self.finished = False
 
 
     def step(self):
-        """ Progress pathfinding by one step, selecting and exploring a single cell.
+        """ Progress pathfinding by one step, selecting and traversing a single cell.
 
         Returns:
-            bool, (int, int), list: Bool of whether the end has been reached, coordinate of cell explored, and path to explored cell.
+            (int, int): Coordinate of cell traversed.
         """
 
         # TODO: Add a finished flag to the class, to prevent further steps after the end has been found.
+        if self.finished:
+            print('End has been found, no more steps will be taken.')
+            return self.end_pos
+        
         if not any(self.state_grid.flatten() == 1):
             print('No more positions to check.')
-            return
+            self.last_path = []
+            return None                                     # NOTE: Could also return start_pos
         
-        next_pos = self.select_next_pos()                       # Find next cell to search
-        self.add_neighbors_to_frontier(next_pos)  # Add neighbors to searchable cells
-        self.state_grid[next_pos] = -1                          # Mark cell as searched
-        self.step_count += 1                                    # Increment step counter
+        next_pos = self.select_next_pos()                   # Find next cell to traverse
+        self.search_neighbors(next_pos)                     # Add neighbors to searched cells
+        self.state_grid[next_pos] = -1                      # Mark cell as traversed
         
-        # TODO: Returning 3 things is excessive, have a class flag for finished instead.
-        return next_pos == self.end_pos, next_pos, self.reconstruct_path(next_pos)
+        self.step_count += 1                                # Increment step counter
+        self.finished = next_pos == self.end_pos            # Check if end has been reached
+        self.last_path = self.reconstruct_path(next_pos)    # Reconstruct path to cell
+        
+        self.path_length = max(self.path_length, self.f_grid[next_pos]/10)  # Divide by 10 to remove the heuristic scalar
+        
+        return next_pos
 
 
     def select_next_pos(self):
-        """ Selects most promising cell from viable frontier cells.
-                > Frontier cell -> lowest f -> lowest h
-                > i.e. Unexplored cell that could be on the shortest path that is closest to the end.
+        """ Selects most promising cell from viable searched cells.
+                > Searched cell -> lowest f -> lowest h
+                > i.e. Searched but untraversed cell that may be on a shortest path and is closest to the end.
 
         Returns:
-            tuple: (int x, int y) coordinate of next cell to search
+            tuple: (int x, int y) coordinate of next cell to traverse
         """
-        masked_f = np.ma.masked_where(self.state_grid != 1, self.f_grid)         # Mask to only searchable cells
+        masked_f = np.ma.masked_where(self.state_grid != 1, self.f_grid)         # Mask to only searched cells
         masked_h = np.ma.masked_where(masked_f != np.min(masked_f), self.h_grid) # Mask further to only cells with the lowest f
         return_pos = np.argmin(masked_h)                                         # Return argument that is closest to the end cell
         return tuple(np.unravel_index(return_pos, self.h_grid.shape))            # Return coordinate in 2D
     
     
-    def add_neighbors_to_frontier(self, pos):
-        """ Adds all direct neighbors of a cell to the frontier.
+    def search_neighbors(self, pos):
+        """ Searches all direct neighbors of a given cell.
                 > x = origin, o = neighbor, . = not added
             . . . . .
             . o o o .
@@ -103,11 +118,11 @@ class A_Star():
                     continue
                 
                 neighbor_pos = (pos[0] + w, pos[1] + h)
-                self.add_to_frontier(neighbor_pos, pos)
+                self.search_cell(neighbor_pos, pos)
 
 
-    def add_to_frontier(self, pos, prev_pos=None):
-        """ Calculate f, g, and h values for a given cell and set its state to searchable.
+    def search_cell(self, pos, prev_pos=None):
+        """ Calculate f, g, and h values for a given cell and set its state to searched.
 
         Args:
             pos (int, int): Position of cell to add
@@ -121,7 +136,7 @@ class A_Star():
         if self.cost_grid[pos] < 0:
             return
         
-        # If cell has already been searched, abort.
+        # If cell has already been traversed, abort.
         if self.state_grid[pos] == -1:
             return
         
@@ -136,23 +151,32 @@ class A_Star():
         # Our f is the sum of our g and h, representing an ideal shortest path from start to end through this cell
         f = self.g_grid[pos] + self.h_grid[pos]
 
+        # If our new f implies a shorter path than our previous f, we update our f_grid to show this.
         if f < self.f_grid[pos]:
             self.f_grid[pos] = f
-            # self.g_grid[pos] = g
-            # H_GRID[pos] = h
-            # P_GRID[pos] = prev_pos
-            # NOTE: May need to update the entire chain of children, if one exists?
             self.state_grid[pos] = 1
             
+            # NOTE: May need to update an entire chain of children, if one exists?
             if prev_pos is not None:
                 self.p_grid[pos] = prev_pos
                     
     
-    def calculate_g(self, pos, prev_pos):         
+    def calculate_g(self, pos, prev_pos):
+        """ Calculate the cumulative traversed distance to a new cell.
+
+        Args:
+            pos (int, int): New cell being added to path.
+            prev_pos (int, int): Parent cell.
+
+        Returns:
+            int: The stored distance from start to prev_pos plus
+                    the heuristic distance from prev_pos to pos (multiplied by traversal cost).
+        """
         if prev_pos is None:
             return 0
         else:
             return self.g_grid[prev_pos] + self.distance_heuristic(pos, prev_pos) * self.cost_grid[pos]
+    
     
     def distance_heuristic(self, pos1, pos2, orthogonal_cost=10, diagonal_cost=14):
         """ Provides a heuristic distance between 2 cells, assuming no obstructions.
@@ -177,10 +201,21 @@ class A_Star():
 
 
     def reconstruct_path(self, pos):
+        """ Generates the list of parent cells leading up to pos.
+
+        Args:
+            pos (int, int): Cell coordinate.
+
+        Returns:
+            [(int, int), ...]: A list of cell coordinates, from the original parent of pos to pos.
+        """
         path = [pos]
+        
+        # If we encounter a coordinate containing -1, we reached a cell with no parent (i.e. start_pos)
         while -1 not in self.p_grid[pos]:
             pos = tuple(self.p_grid[pos])
             path.append(pos)
+            
         return path[::-1] # Reversed to give path from start -> end
         
 if __name__ == '__main__':
