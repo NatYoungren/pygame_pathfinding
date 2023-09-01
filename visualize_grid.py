@@ -22,8 +22,8 @@ START_COLOR = (100, 180, 100) # Dark green
 END_COLOR = (180, 80, 180) # Dark purple
 
 DEFAULT_COST = 1
-PERMEABLE_WALLS = True
-WALL_COST = 20
+PERMEABLE_WALLS = False
+WALL_COST = 100
 
 CELL_W, CELL_H = SCREEN_W / GRID_W, SCREEN_H / GRID_H
 
@@ -160,13 +160,14 @@ def main():
 
 
 def distance_heuristic(pos, end_pos):
-    # Use 1.4 for diagonal distance, 1 for horizontal/vertical
-    # vector = np.abs(np.array(pos) - np.array(end_pos))
-    # return abs(vector[0] - vector[1]) + 1.4 * min(vector)
+    # Use 1.4 for diagonal distance, 1 for horizontal/vertical # NOTE: Updated to 14 and 10
+    vector = np.abs(np.array(pos) - np.array(end_pos))
+    # NOTE: Estimating and casting to integer vastly reduces recycled cell calculations due to float innacuracy/minute differences
+    return int(10 * abs(vector[0] - vector[1]) + 14 * min(vector))
     
-    return np.sqrt((pos[0] - end_pos[0])**2 + (pos[1] - end_pos[1])**2)
+    # return np.sqrt((pos[0] - end_pos[0])**2 + (pos[1] - end_pos[1])**2)
 
-
+NEGATIVE_COUNT = 0
 def add_to_frontier(pos, end_pos, prev_pos=None):
 
     if pos[0] < 0 or pos[0] >= GRID_W or pos[1] < 0 or pos[1] >= GRID_H:
@@ -179,12 +180,16 @@ def add_to_frontier(pos, end_pos, prev_pos=None):
         g = 0
     else:
         g = G_GRID[prev_pos] + distance_heuristic(pos, prev_pos)*COST_GRID[pos] # TODO: Multiple tile cost by distance_heuristic to add extra diagonal cost
-    
+     
     # Technically we may be recalculating this value, but it's not a big deal
     h = distance_heuristic(pos, end_pos)
     f = g + h
     # print(pos, f, g, h)
     if f < F_GRID[pos]:
+        if FRONTIER[pos] == -1:
+            global NEGATIVE_COUNT
+            NEGATIVE_COUNT += 1
+        print(f, F_GRID[pos], FRONTIER[pos])
         F_GRID[pos] = f
         G_GRID[pos] = g
         H_GRID[pos] = h
@@ -296,3 +301,4 @@ def get_tile(pos):
 
 if __name__ == '__main__':
     main()
+    print(NEGATIVE_COUNT)
