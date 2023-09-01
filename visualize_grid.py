@@ -29,7 +29,6 @@ CELL_W, CELL_H = SCREEN_W / GRID_W, SCREEN_H / GRID_H
 
 
 COST_GRID = np.full((GRID_W, GRID_H), fill_value=DEFAULT_COST, dtype=np.uint8)
-TRAVEL_GRID = np.full((GRID_W, GRID_H), fill_value=np.inf, dtype=np.float32)
 
 # Heuristic distance from each tile to the end, (can be precomputed, but not necessary)
 H_GRID = np.full((GRID_W, GRID_H), fill_value=np.inf, dtype=np.float32)
@@ -50,7 +49,6 @@ STORED_PATH = []
 
 def reset_grids():
     COST_GRID.fill(DEFAULT_COST)
-    TRAVEL_GRID.fill(np.inf)
     H_GRID.fill(np.inf)
     G_GRID.fill(np.inf)
     F_GRID.fill(np.inf)
@@ -87,7 +85,6 @@ def main():
         draw_search(screen)
         
         draw_walls(screen)
-        
         
         draw_path(screen)
         
@@ -264,14 +261,6 @@ def draw_search(screen):
                 pg.draw.rect(screen, FRONTIER_COLORS[(h + w) % 2], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
             elif FRONTIER[w, h] == -1:
                 pg.draw.rect(screen, SEARCHED_COLORS[(h + w) % 2], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
-            # if TRAVEL_GRID[w, h] != np.inf:
-            #     pg.draw.rect(screen, SEARCHED_COLORS[(h + w) % 2], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
-                
-# def draw_frontier(screen):
-#     for w in range(GRID_W):
-#         for h in range(GRID_H):
-#             if (w, h) in FRONTIER:
-#                 pg.draw.rect(screen, FRONTIER_COLORS[(h + w) % 2], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
 
 def reconstruct_path(pos):
     # print(pos)
