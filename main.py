@@ -1,12 +1,18 @@
 import numpy as np
 import pygame as pg
-from a_star_class import A_Star, A_Star_Portals
+from a_star import A_Star, A_Star_Portals
 import display_vars as dv
 # Add game of life
 
+# INSTRUCTIONS:
+# 1. Left click to set start position then end position.
+# 2a. Place walls with left click, remove walls with right click.
+# 2b. Place portal entrances and exits with 0 key. (Must be paired)
+
+
 # CONTROL VARS
 MANUAL_CONTROL = False
-AUTO_STEPS_PER_SECOND = 50
+AUTO_STEPS_PER_SECOND = 100
 
 # PATHFINDING VARS
 GRID_W, GRID_H = 32, 24
@@ -14,7 +20,6 @@ DEFAULT_COST = 1
 WALL_COST = -1
 
 # DISPLAY CONSTANTS
-# TODO: Force a square aspect ratio.
 SQUARE_CELLS = True
 CELL_W, CELL_H = dv.SCREEN_W / GRID_W, dv.SCREEN_H / GRID_H
 if SQUARE_CELLS: CELL_W = CELL_H = min(CELL_W, CELL_H)
@@ -61,19 +66,20 @@ def main():
                     return main()
                 
                 # Spacebar steps the simulation if manual control is enabled
-                elif not sim.finished and event.key == pg.K_SPACE:
+                elif event.key == pg.K_SPACE and not sim.finished:
                     if sim.start_pos is None or sim.end_pos is None:
                         print('Please select a start and end position.')
                         continue
                     
-                    searching = True
+                    searching = True # If start and end are set, begin searching
+                    
                     # If manual control is enabled, step the simulation
                     if MANUAL_CONTROL and searching:
                         _ = sim.step()
                         if sim.finished: print(f'Finished in: {sim.step_count} steps. Path had length: {sim.path_length}.')
                     
-                # 0 Key places portal start and end points
-                elif not sim.finished and event.key == pg.K_0:
+                # 0 Key places portal entrance and exits
+                elif event.key == pg.K_0 and not searching and not sim.finished and sim.end_pos is not None:
                     if temp_portal_entrance is None:
                         temp_portal_entrance = get_tile(pg.mouse.get_pos())
                     else:
@@ -92,7 +98,7 @@ def main():
                     
                 elif sim.end_pos is None:
                     sim.end_pos = clicked_tile
-                    sim.search_cell(sim.start_pos) # Start searching from start_pos
+                    sim.search_cell(sim.start_pos) # Seed search with start_pos
 
 
             # TODO: Add realtime wall drawing, allow paths to be cut and altered?
