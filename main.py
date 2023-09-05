@@ -161,12 +161,24 @@ def draw_state(screen, sim):
 
 
 def get_tile(pos):
+    """ Convert pixel coordinates into cell coordinates.
+            Always returns a valid cell coordinate, even if the pixel position is outside the grid.
+            This is done by clamping the pixel position to the grid size.
+
+    Args:
+        pos (int, int): Pixel position, presumably from mouse.get_pos()
+
+    Returns:
+        (int, int): Cell coordinates, limited to grid size.
+    """
     pos = np.array(pos)
     pos[0] -= ORIGIN_X
     pos[1] -= ORIGIN_Y
-    np.clip(pos[:1], 0, dv.SCREEN_W-1, out=pos[:1])
-    np.clip(pos[0:], 0, dv.SCREEN_H-1, out=pos[0:])
-    return (int(pos[0] / CELL_W), int(pos[1] / CELL_H))
+    pos[0] /= CELL_W
+    pos[1] /= CELL_H
+    np.clip(pos[:1], 0, GRID_W-1, out=pos[:1])
+    np.clip(pos[0:], 0, GRID_H-1, out=pos[0:])
+    return tuple(pos.astype(int))
 
 if __name__ == '__main__':
     main()
