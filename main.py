@@ -51,7 +51,7 @@ def main():
 
     # Main loop
     while running:
-        pg.display.set_caption(f'A* Pathfinding: steps: {sim.step_count} ~ length: {sim.path_length}')
+        pg.display.set_caption(f'A* Pathfinding: steps: {sim.step_count} ~ heuristic count: {sim.heuristic_count} ~ length: {sim.path_length}')
         
         # Draw current state of pathfinding sim
         draw_state(screen, sim)
@@ -86,16 +86,20 @@ def main():
                         _ = sim.step()
                         if sim.finished: print(f'Finished in: {sim.step_count} steps. Path had length: {sim.path_length}.')
                     
-                # 0 Key places portal entrance and exits
+                # 'p' Key places portal entrance and exits
                 elif event.key == pg.K_p and not searching and not sim.finished and sim.end_pos is not None:
+                    
+                     # If no portal entrance is set, set one
                     if temp_portal_entrance is None:
                         temp_portal_entrance = get_tile(pg.mouse.get_pos())
+                        
+                    # If a portal entrance is set, set the exit and add the portal to the sim
                     else:
                         portal_exit = get_tile(pg.mouse.get_pos())
                         sim.portals[temp_portal_entrance] = portal_exit
                         print('Portal created from', temp_portal_entrance, 'to', portal_exit)
-    
-                        temp_portal_entrance = None
+                        
+                        temp_portal_entrance = None # Reset the temp portal entrance
                 
             
             # On left click, set start/end if they are not yet set

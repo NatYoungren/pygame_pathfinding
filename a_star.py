@@ -7,7 +7,7 @@ import numpy as np
 # 3. If using portals, add them to the portals dict.
 # 4. Manually call search_cell() to seed a starting cell.
 # 5. Step() the simulation until a path is found or no more cells can be traversed.
-# 6. Examine pathfinding results with reconstruct_path(), step_count, and path_length.
+# 6. Examine pathfinding results with reconstruct_path(), step_count, heuristic_count and path_length.
 #
 
 # TODO: Implement non-grid version of A* (i.e. for a continuous space or graph)
@@ -44,10 +44,11 @@ class A_Star():
         self.p_grid = np.full((self.w, self.h, 2), fill_value=-1, dtype=int)                # Parent of each tile, used to reconstruct path. (stored as (x, y) coords)
         # # #
         
-        self.step_count = 0     # Number of steps taken
-        self.last_path = []     # List of cells traversed in the last step
-        self.path_length = 0    # Length of the path found
-        self.finished = False   # Flag to indicate if the end has been traversed
+        self.step_count = 0      # Number of steps taken
+        self.heuristic_count = 0 # Number of times a distance heuristic has been calculated
+        self.last_path = []      # List of cells traversed in the last step
+        self.path_length = 0     # Length of the path found
+        self.finished = False    # Flag to indicate if the end has been traversed
         
         
     @property
@@ -193,6 +194,8 @@ class A_Star():
         Returns:
             int: Heuristic distance between pos1 and pos2.
         """
+        self.heuristic_count += 1
+        
         # Convert to distance vector
         vector = np.abs(np.array(pos1) - np.array(pos2))
         
