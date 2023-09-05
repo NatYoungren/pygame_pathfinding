@@ -21,8 +21,6 @@ if SQUARE_CELLS: CELL_W = CELL_H = min(CELL_W, CELL_H)
 ORIGIN_X = (dv.SCREEN_W - CELL_W * GRID_W) / 2
 ORIGIN_Y = (dv.SCREEN_H - CELL_H * GRID_H) / 2
 
-STORED_PATH = []
-
 def main():
     sim = A_Star(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST, wall_cost=WALL_COST)
 
