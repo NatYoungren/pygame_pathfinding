@@ -26,9 +26,9 @@ def main():
 
     pg.init()
     screen = pg.display.set_mode((dv.SCREEN_W, dv.SCREEN_H))
-    
-    running = True
-    searching = False
+
+    running = True # Main loop control
+    searching = False # Pathfinding loop control
 
     
     # Timer to step the simulation
