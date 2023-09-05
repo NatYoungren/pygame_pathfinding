@@ -2,14 +2,13 @@ import numpy as np
 
 # TODO: Implement non-grid version of A* (i.e. for a continuous space or graph)
 # TODO: Implement teleportation to allow for non-grid movement (i.e. portals), must be factored into heuristic calculation
-# TODO: f_grid is entirely derived, and it may be more flexible to add g and h whenever an f value is needed.
 # TODO: Use numba to optimize speed?
 
 class A_Star():
     
     def __init__(self, w:int=20, h:int=20,
                  start_pos:(int, int)=None, end_pos:(int, int)=None,
-                 default_cost:int=1, wall_cost:int=-1) -> None:
+                 default_cost:int=1) -> None:
         
         # Width and height of grid
         self.w, self.h = w, h
@@ -19,10 +18,7 @@ class A_Star():
         
         # Distance multiplier of each tile, used to define terrain
         self.default_cost = default_cost    # 1 = normal, 2 = twice as hard to travel through, etc.
-        
-        # TODO: Remove all reference to wall_cost, as it should be handled externally?
-        self.wall_cost = wall_cost          # If cost is negative, cells are impassable (i.e. walls)
-        
+                
         # # #
         # These vars are all set to an (w, h) array of their respective values in reset()
         #
