@@ -7,8 +7,14 @@ import display_vars as dv
 # INSTRUCTIONS:
 # 1. Left click to set start position then end position.
 # 2a. Place walls with left click, remove walls with right click.
-# 2b. Place portal entrances and exits with 0 key. (Must be paired)
+# 2b. Place portal entrances and exits with 'p' key. (Must be paired)
+# 3. Press spacebar to start the simulation.
+#       (Continue to step with spacebar if manual control is enabled)
+# 4. Press 'r' to reset the simulation, or escape to quit.
 
+
+# TODO: Generate a related color pair for each portal pair.
+# TODO: Add controls and color gradients to difficult terrain.
 
 # CONTROL VARS
 MANUAL_CONTROL = False
@@ -81,7 +87,7 @@ def main():
                         if sim.finished: print(f'Finished in: {sim.step_count} steps. Path had length: {sim.path_length}.')
                     
                 # 0 Key places portal entrance and exits
-                elif event.key == pg.K_0 and not searching and not sim.finished and sim.end_pos is not None:
+                elif event.key == pg.K_p and not searching and not sim.finished and sim.end_pos is not None:
                     if temp_portal_entrance is None:
                         temp_portal_entrance = get_tile(pg.mouse.get_pos())
                     else:
