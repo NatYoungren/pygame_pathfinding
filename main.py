@@ -144,7 +144,7 @@ def main():
 def draw_state(screen, sim):
     screen.fill(dv.BG_COLOR) # Seen in grid lines between cells and empty border space.
     
-    # This loop is optimized to reduce the number of draw calls to 1 per cell.
+    # This loop is optimized to reduce the number of draw calls to 1 per cell. (Excepting portals)
     # This is at the expense of checks for each cell, and readability overall.
     
     triangle_inset_w, triangle_inset_h = CELL_W / 4, CELL_H / 4
@@ -178,15 +178,16 @@ def draw_state(screen, sim):
             
             else:                                       # Draw empty/unsearched cells.
                 pg.draw.rect(screen, dv.CELL_COLORS[(h + w) % 2], rect_vars)
-            
-            # Draw portals as triangles, with direction indicating entrance/exit
-            if (w, h) in sim.portals.keys():     # Draw portal entrances.
-                i = list(sim.portals.keys()).index((w, h))
-                pg.draw.polygon(screen, PORTAL_COLORS[i], ((x+triangle_inset_w, y+CELL_H-triangle_inset_h), (x+CELL_W-triangle_inset_w, y+CELL_H-triangle_inset_h), (x+int(CELL_W/2), y+triangle_inset_h)))
-                
-            elif (w, h) in sim.portals.values():     # Draw portal exits.
-                i = list(sim.portals.values()).index((w, h))
-                pg.draw.polygon(screen, PORTAL_COLORS[i], ((x+triangle_inset_w, y+triangle_inset_h), (x+CELL_W-triangle_inset_w, y+triangle_inset_h), (x+int(CELL_W/2), y+CELL_H-triangle_inset_h)))
+    
+    # Draw portals as triangles, with direction indicating entrance/exit
+    for i, (p_entrance, p_exit) in enumerate(sim.portals.items()):
+        # Draw portal entrances.
+        x, y = ORIGIN_X + CELL_W * p_entrance[0], ORIGIN_Y + CELL_H * p_entrance[1]
+        pg.draw.polygon(screen, PORTAL_COLORS[i], ((x+triangle_inset_w, y+CELL_H-triangle_inset_h), (x+CELL_W-triangle_inset_w, y+CELL_H-triangle_inset_h), (x+int(CELL_W/2), y+triangle_inset_h)))
+        
+        # Draw portal exits.
+        x, y = ORIGIN_X + CELL_W * p_exit[0], ORIGIN_Y + CELL_H * p_exit[1]
+        pg.draw.polygon(screen, PORTAL_COLORS[i], ((x+triangle_inset_w, y+triangle_inset_h), (x+CELL_W-triangle_inset_w, y+triangle_inset_h), (x+int(CELL_W/2), y+CELL_H-triangle_inset_h)))
                        
 
 def get_tile(pos):
