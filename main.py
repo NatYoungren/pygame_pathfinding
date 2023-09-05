@@ -1,12 +1,12 @@
 import numpy as np
 import pygame as pg
-from a_star_class import A_Star
+from a_star_class import A_Star, A_Star_Portals
 import display_vars as dv
 # Add game of life
 
 # CONTROL VARS
 MANUAL_CONTROL = False
-AUTO_STEPS_PER_SECOND = 1000
+AUTO_STEPS_PER_SECOND = 50
 
 # PATHFINDING VARS
 GRID_W, GRID_H = 32, 24
@@ -22,7 +22,7 @@ ORIGIN_X = (dv.SCREEN_W - CELL_W * GRID_W) / 2
 ORIGIN_Y = (dv.SCREEN_H - CELL_H * GRID_H) / 2
 
 def main():
-    sim = A_Star(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST)
+    sim = A_Star_Portals(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST)
 
     pg.init()
     screen = pg.display.set_mode((dv.SCREEN_W, dv.SCREEN_H))
@@ -30,6 +30,8 @@ def main():
     running = True # Main loop control
     searching = False # Pathfinding loop control
 
+    # Temp var to store portal start position during portal creation
+    temp_portal_entrance = None
     
     # Timer to auto-step the simulation
     pg.time.set_timer(pg.USEREVENT+1, 1000//AUTO_STEPS_PER_SECOND)
@@ -53,6 +55,11 @@ def main():
                 if event.key == pg.K_ESCAPE:
                     running = False
                     
+                # R key resets the simulation
+                elif event.key == pg.K_r:
+                    print('Resetting...')
+                    return main()
+                
                 # Spacebar steps the simulation if manual control is enabled
                 elif not sim.finished and event.key == pg.K_SPACE:
                     if sim.start_pos is None or sim.end_pos is None:
@@ -65,12 +72,17 @@ def main():
                         _ = sim.step()
                         if sim.finished: print(f'Finished in: {sim.step_count} steps. Path had length: {sim.path_length}.')
                     
-                    
-                    
-                # R key resets the simulation
-                elif event.key == pg.K_r:
-                    print('Resetting...')
-                    return main()
+                # 0 Key places portal start and end points
+                elif not sim.finished and event.key == pg.K_0:
+                    if temp_portal_entrance is None:
+                        temp_portal_entrance = get_tile(pg.mouse.get_pos())
+                    else:
+                        portal_exit = get_tile(pg.mouse.get_pos())
+                        sim.portals[temp_portal_entrance] = portal_exit
+                        print('Portal created from', temp_portal_entrance, 'to', portal_exit)
+    
+                        temp_portal_entrance = None
+                
             
             # On left click, set start/end if they are not yet set
             elif event.type == pg.MOUSEBUTTONDOWN:
@@ -135,6 +147,11 @@ def draw_state(screen, sim):
             elif sim.cost_grid[w, h] == WALL_COST:      # Draw walls.
                 pg.draw.rect(screen, dv.WALL_COLOR, rect_vars)
            
+            elif (w, h) in sim.portals.keys():     # Draw portal entrances.
+                pg.draw.rect(screen, dv.PORTAL_COLORS[0], rect_vars)
+            elif (w, h) in sim.portals.values():     # Draw portal exits.
+                pg.draw.rect(screen, dv.PORTAL_COLORS[1], rect_vars)         
+                       
             elif sim.state_grid[w, h] == 1:             # Draw searched cells.
                 pg.draw.rect(screen, dv.SEARCHED_COLORS[(h + w) % 2], rect_vars)
             
@@ -159,7 +176,7 @@ def get_tile(pos):
     pos[0] = (pos[0] - ORIGIN_X) / CELL_W
     pos[1] = (pos[1] - ORIGIN_Y) / CELL_H
     np.clip(pos[:1], 0, GRID_W-1, out=pos[:1])
-    np.clip(pos[0:], 0, GRID_H-1, out=pos[0:])
+    np.clip(pos[1:], 0, GRID_H-1, out=pos[1:])
     return tuple(pos.astype(int))
 
 if __name__ == '__main__':
