@@ -2,8 +2,9 @@ import numpy as np
 
 # TODO: Implement non-grid version of A* (i.e. for a continuous space or graph)
 # TODO: Storing a start_pos is potentially redundant, as multiple starts could be used.
-# TODO: Implement teleportation to allow for non-grid movement (i.e. portals), must be factored into heuristic calculation
 # TODO: Use numba to optimize speed?
+# TODO: Consider a dict to handle parents? (i.e. {pos: parent_pos})
+# TODO: Alternately, consider a grid to handle portals? (i.e. portals[x, y] = (x, y))
 
 class A_Star():
     
@@ -39,7 +40,6 @@ class A_Star():
     @property
     def f_grid(self):
         return np.add(self.h_grid, self.g_grid)
-    
 
 
     def step(self):
@@ -221,20 +221,27 @@ class A_Star_Portals(A_Star):
                  default_cost:int=1) -> None:
         super().__init__(w, h, start_pos, end_pos, default_cost)
         
-        # Used to track portal targets, stored as (x, y) coordinates
-        self.portals = {} # np.full((self.w, self.h, 2), fill_value=-1, dtype=int)
+        # Dict of portal entrances and exits, stored as (x, y) coordinates
+        self.portals = {}
         
     
     def search_neighbors(self, pos):
+        """ Seach neighbors of a given cell, and if the cell is a portal, search the corresponding exit cell as well.
+
+        Args:
+            pos (int, int): _description_
+        """
         super().search_neighbors(pos)
+        
+        # If the cell is a portal, search the corresponding exit cell as well.
         if pos in self.portals:
             self.search_cell(self.portals[pos], pos)
             
     
     def distance_heuristic(self, pos1, pos2, orthogonal_cost=10, diagonal_cost=14):
-        """ Calculates distance between cells, with the additional consideration of portal shortcuts.
-            This iteration of the heuristic is more expensive than the original.
-            This iteration (as portals are one-way) is specifically the distance from pos1 to pos2, not vice-versa.
+        """ Calculates distance between cells, with the additional consideration of multi-portal shortcuts.
+                This version of the heuristic is more expensive than the original.
+                This version (as portals are one-way) is specifically the distance from pos1 to pos2, not vice-versa.
 
         Args:
             pos1 (int, int): Cell coordinate.
@@ -246,28 +253,48 @@ class A_Star_Portals(A_Star):
             int: Heuristic distance between pos1 and pos2.
         """
         
-        # TODO: Currently only one portal is considered for each possible path. This should be expanded to consider all possible permutation.
-        
-        # Calculate distance between cell
-        distances = [super().distance_heuristic(pos1, pos2, orthogonal_cost, diagonal_cost)]
-        
-        # Calculate distances from cell to portal entrance and portal exit to end (Distance to end could be precomputed)
-        for s, e in self.portals.items():
-            distances.append(super().distance_heuristic(pos1, s, orthogonal_cost, diagonal_cost) + super().distance_heuristic(e, pos2, orthogonal_cost, diagonal_cost))
-        
-        return min(distances)
-        
+        return self.recursive_portal_heuristic(pos1, pos2, portals=self.portals, orthogonal_cost=orthogonal_cost, diagonal_cost=diagonal_cost)
+    
+    
+    def recursive_portal_heuristic(self, pos1, pos2, portals={}, **kwargs):
+        """ Recursive function to calculate the heuristic distance between two cells, considering portal permutations.
+                Runtime is O(n!) where n is the number of portals, could potentially be improved.
+                One possibility is to store the shortest distance to each portal, and only recurse if that distance can be reduced.
 
+        Args:
+            pos1 (int, int): Cell coordinate.
+            pos2 (int, int): Cell coordinate.
+            portals (dict, optional): Dict of remaining portals to try, reduced by each recursion. Defaults to {}.
+
+        Returns:
+            int: Heuristic distance between pos1 and pos2
+        """
+        # Begin with the heuristic distance between the two cells
+        shortest_dist = super().distance_heuristic(pos1, pos2, **kwargs)
+        
+        # For each portal, calculate the distance from pos1 to the portal entrance, and from the portal exit to pos2
+        for portal_entry, portal_exit in portals.items():
+            
+            # Calculate distance from pos1 to portal entrance
+            to_entrance = super().distance_heuristic(pos1, portal_entry, **kwargs)
+
+            # Avoid pointless recursion if the distance to the portal entrance is longer than the shortest distance
+            if to_entrance < shortest_dist:
                 
+                # Remove portal from dict to prevent infinite recursion
+                sub_portals = {en:ex for en, ex in portals.items() if en != portal_entry} # TODO: Is there a faster way to do this?
+
+                # Recursively calculate distance from portal exit to pos2, considering all unused portals
+                from_exit = self.recursive_portal_heuristic(portal_exit, pos2, sub_portals, **kwargs)
+
+                # Retain the shortest distance found so far
+                shortest_dist = min(shortest_dist, to_entrance + from_exit)
+        
+        return shortest_dist
+
         
 
 if __name__ == '__main__':
     # Check initialization
     a1 = A_Star()
     a2 = A_Star_Portals()
-    a2.portals[(5, 5)] = (10, 10)
-    a2.start_pos = (0, 0)
-    a2.state_grid[0, 0] = 1
-    a2.end_pos = (19, 19)
-    print(a2.distance_heuristic((0, 0), (19, 19)))
-    # a2.step()
