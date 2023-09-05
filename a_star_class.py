@@ -30,7 +30,7 @@ class A_Star():
         self.cost_grid = None   # Cost to travel through each tile, used to define terrain
         self.h_grid = None      # Heuristic distance from each tile to the end, (could be precomputed)
         self.g_grid = None      # Distance from start to each tile, based on shortest path found so far
-        self.f_grid = None      # Sum of G and H, represents ideal path lengths from start to end
+        # self.f_grid = None      # Sum of G and H, represents ideal path lengths from start to end
         self.p_grid = None      # Parent of each tile, used to reconstruct path. (stored as (x, y) coords)
         # # #
         
@@ -41,6 +41,10 @@ class A_Star():
         
         self.reset()
 
+    @property
+    def f_grid(self):
+        return np.add(self.h_grid, self.g_grid)
+    
 
     def reset(self):
         """ Set all grids/vars to default values.
@@ -51,7 +55,7 @@ class A_Star():
         self.cost_grid = np.full((self.w, self.h), fill_value=self.default_cost, dtype=int)
         self.h_grid = np.full((self.w, self.h), fill_value=np.iinfo(int).max, dtype=int)
         self.g_grid = np.full((self.w, self.h), fill_value=np.iinfo(int).max, dtype=int)
-        self.f_grid = np.full((self.w, self.h), fill_value=np.iinfo(int).max, dtype=int)
+        # self.f_grid = np.full((self.w, self.h), fill_value=np.iinfo(int).max, dtype=int)
         self.p_grid = np.full((self.w, self.h, 2), fill_value=-1, dtype=int)
         self.step_count = 0
         self.finished = False
@@ -82,7 +86,7 @@ class A_Star():
         self.finished = next_pos == self.end_pos            # Check if end has been reached
         self.last_path = self.reconstruct_path(next_pos)    # Reconstruct path to cell
         
-        self.path_length = max(self.path_length, self.f_grid[next_pos]/10)  # Divide by 10 to remove the heuristic scalar
+        self.path_length = max(self.path_length, self.g_grid[next_pos]/10)  # Divide by 10 to remove the heuristic scalar
         
         return next_pos
 
@@ -140,26 +144,28 @@ class A_Star():
         if self.state_grid[pos] == -1:
             return
         
-        # Calculate distance from start to this cell, and update if it is shorter than the previous value
-        #   > g = (distance from prev cell to start) + (distance from this cell to prev cell * cost of this cell)
-        self.g_grid[pos] = min(self.calculate_g(pos, prev_pos), self.g_grid[pos])
-
         # If we have not yet calculated the distance from this cell to the end, do so now
         if self.h_grid[pos] == np.iinfo(int).max:
             self.h_grid[pos] = self.distance_heuristic(pos, self.end_pos)
         
-        # Our f is the sum of our g and h, representing an ideal shortest path from start to end through this cell
-        f = self.g_grid[pos] + self.h_grid[pos]
-
-        # If our new f implies a shorter path than our previous f, we update our f_grid to show this.
-        if f < self.f_grid[pos]:
-            self.f_grid[pos] = f
-            self.state_grid[pos] = 1
+        
+        if prev_pos is None:
+            # If we have no parent cell, the distance from our parent is 0 and we do NOT update p_grid.
+            self.g_grid[pos] = 0
             
-            # NOTE: May need to update an entire chain of children, if one exists?
-            if prev_pos is not None:
+        else:
+            # Calculate distance from start position to this cell
+            #   > g = (distance from prev cell to start) + (distance from this cell to prev cell * cost of this cell)
+            g = self.calculate_g(pos, prev_pos)
+            
+            # Update g_grid and parent if g is shorter than the previous g
+            if g < self.g_grid[pos]:
                 self.p_grid[pos] = prev_pos
-                    
+                self.g_grid[pos] = g
+        
+        # Cell will remain searched until it is traversed or pathfinding ends.
+        self.state_grid[pos] = 1
+
     
     def calculate_g(self, pos, prev_pos):
         """ Calculate the cumulative traversed distance to a new cell.
