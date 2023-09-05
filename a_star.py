@@ -1,10 +1,22 @@
 import numpy as np
 
+# NOTE: INSTRUCTIONS
+#
+# 1. Initialize the class with the desired grid size, start and end positions, and default cost.
+# 2. Set the cost of any impassable tiles to a negative value.
+# 3. If using portals, add them to the portals dict.
+# 4. Manually call search_cell() to seed a starting cell.
+# 5. Step() the simulation until a path is found or no more cells can be traversed.
+# 6. Examine pathfinding results with reconstruct_path(), step_count, and path_length.
+#
+
 # TODO: Implement non-grid version of A* (i.e. for a continuous space or graph)
-# TODO: Storing a start_pos is potentially redundant, as multiple starts could be used.
 # TODO: Use numba to optimize speed?
-# TODO: Consider a dict to handle parents? (i.e. {pos: parent_pos})
-# TODO: Alternately, consider a grid to handle portals? (i.e. portals[x, y] = (x, y))
+# TODO: Storing a start_pos is potentially redundant, as multiple starts could be used.
+
+# TODO: Consider a dict to store parents? (i.e. {pos: parent_pos})
+# TODO: Alternately, consider a grid to store portals? (i.e. portals[x, y] = (x, y))
+
 
 class A_Star():
     
@@ -16,13 +28,14 @@ class A_Star():
         self.w, self.h = w, h
         
         # Start and end positions
+        # NOTE: Start position is not required, but is useful for visualizing the algorithm.
         self.start_pos, self.end_pos = start_pos, end_pos
         
         # Distance multiplier of each tile, used to define terrain
         # Negative values are considered impassable
-        # Lower value cells will be prioritized by the algorithm
+        # Lower cost cells will be contribute to shorter paths and be prioritized by the algorithm
         self.default_cost = default_cost
-                
+        
         # # #
         self.state_grid = np.zeros((self.w, self.h), dtype=int)                             # Holds status of each tile, 0 = unsearched, 1 = searched, -1 = traversed
         self.cost_grid = np.full((self.w, self.h), fill_value=self.default_cost, dtype=int) # Cost to travel through each tile, used to define terrain
@@ -31,10 +44,10 @@ class A_Star():
         self.p_grid = np.full((self.w, self.h, 2), fill_value=-1, dtype=int)                # Parent of each tile, used to reconstruct path. (stored as (x, y) coords)
         # # #
         
-        self.step_count = 0
-        self.last_path = []
-        self.path_length = 0
-        self.finished = False
+        self.step_count = 0     # Number of steps taken
+        self.last_path = []     # List of cells traversed in the last step
+        self.path_length = 0    # Length of the path found
+        self.finished = False   # Flag to indicate if the end has been traversed
         
         
     @property
@@ -46,7 +59,7 @@ class A_Star():
         """ Progress pathfinding by one step, selecting and traversing a single cell.
 
         Returns:
-            (int, int): Coordinate of cell traversed.
+            (int, int): Coordinate of cell traversed. None, if no more cells can be traversed.
         """
 
         # TODO: Add a finished flag to the class, to prevent further steps after the end has been found.
