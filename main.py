@@ -1,40 +1,33 @@
 import numpy as np
 import pygame as pg
 from a_star_class import A_Star
+import display_vars as dv
+# Add game of life
 
+# CONTROL VARS
 MANUAL_CONTROL = False
 AUTO_STEPS_PER_SECOND = 1000
 
-SCREEN_W, SCREEN_H = 800, 800
-
-BORDER_PX = 1
-
-BG_COLOR = (0, 0, 0) # Black, seen in grid lines between cells
-CELL_COLORS = (255, 255, 255), (255, 255, 255) 
-TRAVERSED_COLORS = (200, 255, 200), (200, 255, 200)
-SEARCHED_COLORS = (100, 255, 100), (100, 255, 100) # Green tinted red, green tinted blue
-WALL_COLOR = (15, 15, 15) # Dark gray
-PATH_COLORS = (240, 50, 50), (200, 0, 0) # Red, darker red
-
-START_COLOR = (100, 180, 100) # Dark green
-END_COLOR = (180, 80, 180) # Dark purple
-
-
-GRID_W, GRID_H = 20, 20
+# PATHFINDING VARS
+GRID_W, GRID_H = 32, 24
 DEFAULT_COST = 1
 WALL_COST = -1
 
-astar = A_Star(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST, wall_cost=WALL_COST)
-
+# DISPLAY CONSTANTS
 # TODO: Force a square aspect ratio.
-CELL_W, CELL_H = SCREEN_W / GRID_W, SCREEN_H / GRID_H
+SQUARE_CELLS = True
+CELL_W, CELL_H = dv.SCREEN_W / GRID_W, dv.SCREEN_H / GRID_H
+if SQUARE_CELLS: CELL_W = CELL_H = min(CELL_W, CELL_H)
+ORIGIN_X = (dv.SCREEN_W - CELL_W * GRID_W) / 2
+ORIGIN_Y = (dv.SCREEN_H - CELL_H * GRID_H) / 2
+
 STORED_PATH = []
 
 def main():
-    sim = A_Star(w=GRID_W, h=GRID_H)
+    sim = A_Star(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST, wall_cost=WALL_COST)
 
     pg.init()
-    screen = pg.display.set_mode((SCREEN_W, SCREEN_H))
+    screen = pg.display.set_mode((dv.SCREEN_W, dv.SCREEN_H))
     
     running = True
     searching = False
@@ -117,46 +110,62 @@ def main():
 
 # TODO: Consolidate all the draw functions into one
 def draw_state(screen, sim):
-    screen.fill(BG_COLOR) # Seen in grid lines between cells.
+    screen.fill(dv.BG_COLOR) # Seen in grid lines between cells and empty border space.
+    
+    # This loop is optimized to reduce the number of draw calls to 1 per cell.
+    # This is at the expense of checks for each cell, and readability overall.
     
     for w in range(GRID_W):
         for h in range(GRID_H):
              # TODO: Draw impassable tiles as black, shade others as a gradient by cost.
-             
-            if sim.cost_grid[w, h] == sim.wall_cost: # Draw walls.
-                pg.draw.rect(screen, WALL_COLOR, (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
+            x, y = ORIGIN_X + CELL_W * w + dv.BORDER_PX, ORIGIN_Y + CELL_H * h + dv.BORDER_PX
+            width, height = CELL_W - dv.BORDER_PX*2, CELL_H - dv.BORDER_PX*2
+            rect_vars = (x, y, width, height)
+            
+            if (w, h) == sim.start_pos:                 # Draw the start position.
+                pg.draw.rect(screen, dv.START_COLOR, rect_vars)
+            
+            elif (w, h) == sim.end_pos:                 # Draw the end position.
+                pg.draw.rect(screen, dv.END_COLOR, rect_vars)
+            
+            elif (w, h) in sim.last_path:               # Draw the last traversed path.
+                i = int(sim.last_path.index((w, h)) in (0, len(sim.last_path)-1))
+                pg.draw.rect(screen, dv.PATH_COLORS[i], rect_vars)
+
+            elif sim.cost_grid[w, h] == sim.wall_cost:  # Draw walls.
+                pg.draw.rect(screen, dv.WALL_COLOR, rect_vars)
            
-            elif sim.state_grid[w, h] == 1:          # Draw searched cells.
-                pg.draw.rect(screen, SEARCHED_COLORS[(h + w) % 2], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
+            elif sim.state_grid[w, h] == 1:             # Draw searched cells.
+                pg.draw.rect(screen, dv.SEARCHED_COLORS[(h + w) % 2], rect_vars)
             
-            elif sim.state_grid[w, h] == -1:         # Draw traversed cells.
-                pg.draw.rect(screen, TRAVERSED_COLORS[(h + w) % 2], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
+            elif sim.state_grid[w, h] == -1:            # Draw traversed cells.
+                pg.draw.rect(screen, dv.TRAVERSED_COLORS[(h + w) % 2], rect_vars)
             
-            else:                                    # Draw empty/unsearched cells.
-                pg.draw.rect(screen, CELL_COLORS[(h + w) % 2], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
+            else:                                       # Draw empty/unsearched cells.
+                pg.draw.rect(screen, dv.CELL_COLORS[(h + w) % 2], rect_vars)
 
-    # Draw the last traversed path.
-    for i, (w, h) in enumerate(sim.last_path):
-        if i == 0 or i == len(sim.last_path)-1:
-            # First and last cells are drawn slightly darker (usually covered by start/end cells, so this could be skipped)
-            pg.draw.rect(screen, PATH_COLORS[1], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
-        else:
-            pg.draw.rect(screen, PATH_COLORS[0], (w*CELL_W+BORDER_PX, h*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
+    # # Draw the last traversed path.
+    # for i, (w, h) in enumerate(sim.last_path):
+    #     if i == 0 or i == len(sim.last_path)-1:
+    #         # First and last cells are drawn slightly darker (usually covered by start/end cells, so this could be skipped)
+    #         pg.draw.rect(screen, dv.PATH_COLORS[1], (w*CELL_W+dv.BORDER_PX, h*CELL_H+dv.BORDER_PX, CELL_W-dv.BORDER_PX*2, CELL_H-dv.BORDER_PX*2))
+    #     else:
+    #         pg.draw.rect(screen, dv.PATH_COLORS[0], (w*CELL_W+dv.BORDER_PX, h*CELL_H+dv.BORDER_PX, CELL_W-dv.BORDER_PX*2, CELL_H-dv.BORDER_PX*2))
     
-    # Draw start cell.
-    if sim.start_pos is not None:
-        pg.draw.rect(screen, START_COLOR, (sim.start_pos[0]*CELL_W+BORDER_PX, sim.start_pos[1]*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
-    
-    # Draw end cell.
-    if sim.end_pos is not None:
-        pg.draw.rect(screen, END_COLOR, (sim.end_pos[0]*CELL_W+BORDER_PX, sim.end_pos[1]*CELL_H+BORDER_PX, CELL_W-BORDER_PX*2, CELL_H-BORDER_PX*2))
+    # # Draw start cell.
+    # if sim.start_pos is not None:
+    #     pg.draw.rect(screen, dv.START_COLOR, (sim.start_pos[0]*CELL_W+dv.BORDER_PX, sim.start_pos[1]*CELL_H+dv.BORDER_PX, CELL_W-dv.BORDER_PX*2, CELL_H-dv.BORDER_PX*2))
+    # # Draw end cell.
+    # if sim.end_pos is not None:
+    #     pg.draw.rect(screen, dv.END_COLOR, (sim.end_pos[0]*CELL_W+dv.BORDER_PX, sim.end_pos[1]*CELL_H+dv.BORDER_PX, CELL_W-dv.BORDER_PX*2, CELL_H-dv.BORDER_PX*2))
 
 
-# TODO: Update to account for possible screen bordering around simulation area.
 def get_tile(pos):
     pos = np.array(pos)
-    np.clip(pos[:1], 0, SCREEN_W-1, out=pos[:1])
-    np.clip(pos[0:], 0, SCREEN_H-1, out=pos[0:])
+    pos[0] -= ORIGIN_X
+    pos[1] -= ORIGIN_Y
+    np.clip(pos[:1], 0, dv.SCREEN_W-1, out=pos[:1])
+    np.clip(pos[0:], 0, dv.SCREEN_H-1, out=pos[0:])
     return (int(pos[0] / CELL_W), int(pos[1] / CELL_H))
 
 if __name__ == '__main__':
