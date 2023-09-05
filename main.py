@@ -33,6 +33,7 @@ CELL_W, CELL_H = dv.SCREEN_W / GRID_W, dv.SCREEN_H / GRID_H
 if SQUARE_CELLS: CELL_W = CELL_H = min(CELL_W, CELL_H)
 ORIGIN_X = (dv.SCREEN_W - CELL_W * GRID_W) / 2
 ORIGIN_Y = (dv.SCREEN_H - CELL_H * GRID_H) / 2
+PORTAL_COLORS = []
 
 def main():
     sim = A_Star_Portals(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST)
@@ -96,6 +97,7 @@ def main():
                     # If a portal entrance is set, set the exit and add the portal to the sim
                     else:
                         portal_exit = get_tile(pg.mouse.get_pos())
+                        PORTAL_COLORS.append(list(np.random.random(size=3) * 256)) # Randomly generate a color for the portal
                         sim.portals[temp_portal_entrance] = portal_exit
                         print('Portal created from', temp_portal_entrance, 'to', portal_exit)
                         
@@ -145,11 +147,14 @@ def draw_state(screen, sim):
     # This loop is optimized to reduce the number of draw calls to 1 per cell.
     # This is at the expense of checks for each cell, and readability overall.
     
+    triangle_inset_w, triangle_inset_h = CELL_W / 4, CELL_H / 4
+
     for w in range(GRID_W):
         for h in range(GRID_H):
-            x, y = ORIGIN_X + CELL_W * w + dv.BORDER_PX, ORIGIN_Y + CELL_H * h + dv.BORDER_PX
+            x, y = ORIGIN_X + CELL_W * w, ORIGIN_Y + CELL_H * h
+            _x, _y = x + dv.BORDER_PX, y + dv.BORDER_PX
             width, height = CELL_W - dv.BORDER_PX*2, CELL_H - dv.BORDER_PX*2
-            rect_vars = (x, y, width, height)
+            rect_vars = (_x, _y, width, height)
             
             if (w, h) == sim.start_pos:                 # Draw the start position.
                 pg.draw.rect(screen, dv.START_COLOR, rect_vars)
@@ -165,11 +170,6 @@ def draw_state(screen, sim):
             elif sim.cost_grid[w, h] == WALL_COST:      # Draw walls.
                 pg.draw.rect(screen, dv.WALL_COLOR, rect_vars)
            
-            elif (w, h) in sim.portals.keys():     # Draw portal entrances.
-                pg.draw.rect(screen, dv.PORTAL_COLORS[0], rect_vars)
-            elif (w, h) in sim.portals.values():     # Draw portal exits.
-                pg.draw.rect(screen, dv.PORTAL_COLORS[1], rect_vars)         
-                       
             elif sim.state_grid[w, h] == 1:             # Draw searched cells.
                 pg.draw.rect(screen, dv.SEARCHED_COLORS[(h + w) % 2], rect_vars)
             
@@ -178,7 +178,16 @@ def draw_state(screen, sim):
             
             else:                                       # Draw empty/unsearched cells.
                 pg.draw.rect(screen, dv.CELL_COLORS[(h + w) % 2], rect_vars)
-
+            
+            # Draw portals as triangles, with direction indicating entrance/exit
+            if (w, h) in sim.portals.keys():     # Draw portal entrances.
+                i = list(sim.portals.keys()).index((w, h))
+                pg.draw.polygon(screen, PORTAL_COLORS[i], ((x+triangle_inset_w, y+CELL_H-triangle_inset_h), (x+CELL_W-triangle_inset_w, y+CELL_H-triangle_inset_h), (x+int(CELL_W/2), y+triangle_inset_h)))
+                
+            elif (w, h) in sim.portals.values():     # Draw portal exits.
+                i = list(sim.portals.values()).index((w, h))
+                pg.draw.polygon(screen, PORTAL_COLORS[i], ((x+triangle_inset_w, y+triangle_inset_h), (x+CELL_W-triangle_inset_w, y+triangle_inset_h), (x+int(CELL_W/2), y+CELL_H-triangle_inset_h)))
+                       
 
 def get_tile(pos):
     """ Convert pixel coordinates into cell coordinates.
