@@ -162,7 +162,7 @@ class A_Star():
         if prev_pos is None:
             return 0
         else:
-            return self.g_grid[prev_pos] + self.distance_heuristic(pos, prev_pos) * self.cost_grid[pos]
+            return self.g_grid[prev_pos] + self.distance_heuristic(prev_pos, pos) * self.cost_grid[pos]
     
     
     def distance_heuristic(self, pos1, pos2, orthogonal_cost=10, diagonal_cost=14):
@@ -224,12 +224,12 @@ class A_Star_Portals(A_Star):
         # Used to track portal targets, stored as (x, y) coordinates
         self.portals = {} # np.full((self.w, self.h, 2), fill_value=-1, dtype=int)
         
-        
+    
     def search_neighbors(self, pos):
         super().search_neighbors(pos)
         if pos in self.portals:
             self.search_cell(self.portals[pos], pos)
-    
+            
     
     def distance_heuristic(self, pos1, pos2, orthogonal_cost=10, diagonal_cost=14):
         """ Calculates distance between cells, with the additional consideration of portal shortcuts.
