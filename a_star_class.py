@@ -1,6 +1,7 @@
 import numpy as np
 
 # TODO: Implement non-grid version of A* (i.e. for a continuous space or graph)
+# TODO: Storing a start_pos is potentially redundant, as multiple starts could be used.
 # TODO: Implement teleportation to allow for non-grid movement (i.e. portals), must be factored into heuristic calculation
 # TODO: Use numba to optimize speed?
 
@@ -17,17 +18,16 @@ class A_Star():
         self.start_pos, self.end_pos = start_pos, end_pos
         
         # Distance multiplier of each tile, used to define terrain
-        self.default_cost = default_cost    # 1 = normal, 2 = twice as hard to travel through, etc.
+        # Negative values are considered impassable
+        # Lower value cells will be prioritized by the algorithm
+        self.default_cost = default_cost
                 
         # # #
-        # These vars are all set to an (w, h) array of their respective values in reset()
-        #
-        self.state_grid = None  # Holds status of each tile, 0 = unsearched, 1 = searched, -1 = traversed
-        self.cost_grid = None   # Cost to travel through each tile, used to define terrain
-        self.h_grid = None      # Heuristic distance from each tile to the end, (could be precomputed)
-        self.g_grid = None      # Distance from start to each tile, based on shortest path found so far
-        # self.f_grid = None      # Sum of G and H, represents ideal path lengths from start to end
-        self.p_grid = None      # Parent of each tile, used to reconstruct path. (stored as (x, y) coords)
+        self.state_grid = np.zeros((self.w, self.h), dtype=int)                             # Holds status of each tile, 0 = unsearched, 1 = searched, -1 = traversed
+        self.cost_grid = np.full((self.w, self.h), fill_value=self.default_cost, dtype=int) # Cost to travel through each tile, used to define terrain
+        self.h_grid = np.full((self.w, self.h), fill_value=np.iinfo(int).max, dtype=int)    # Heuristic distance from each tile to the end, (could be precomputed)
+        self.g_grid = np.full((self.w, self.h), fill_value=np.iinfo(int).max, dtype=int)    # Distance from start to each tile, based on shortest path found so far
+        self.p_grid = np.full((self.w, self.h, 2), fill_value=-1, dtype=int)                # Parent of each tile, used to reconstruct path. (stored as (x, y) coords)
         # # #
         
         self.step_count = 0
@@ -35,26 +35,11 @@ class A_Star():
         self.path_length = 0
         self.finished = False
         
-        self.reset()
-
+        
     @property
     def f_grid(self):
         return np.add(self.h_grid, self.g_grid)
     
-
-    def reset(self):
-        """ Set all grids/vars to default values.
-                Will be used to initialize and reset between searches.
-                Max integer value is a stand-in for infinity.
-        """
-        self.state_grid = np.zeros((self.w, self.h), dtype=int)
-        self.cost_grid = np.full((self.w, self.h), fill_value=self.default_cost, dtype=int)
-        self.h_grid = np.full((self.w, self.h), fill_value=np.iinfo(int).max, dtype=int)
-        self.g_grid = np.full((self.w, self.h), fill_value=np.iinfo(int).max, dtype=int)
-        # self.f_grid = np.full((self.w, self.h), fill_value=np.iinfo(int).max, dtype=int)
-        self.p_grid = np.full((self.w, self.h, 2), fill_value=-1, dtype=int)
-        self.step_count = 0
-        self.finished = False
 
 
     def step(self):
@@ -220,5 +205,69 @@ class A_Star():
             
         return path[::-1] # Reversed to give path from start -> end
         
+
+#
+#
+# # # # # # # # # # # # #
+#  A* with Portals      #
+# # # # # # # # # # # # #
+#
+#
+
+class A_Star_Portals(A_Star):
+    
+    def __init__(self, w:int=20, h:int=20,
+                 start_pos:(int, int)=None, end_pos:(int, int)=None,
+                 default_cost:int=1) -> None:
+        super().__init__(w, h, start_pos, end_pos, default_cost)
+        
+        # Used to track portal targets, stored as (x, y) coordinates
+        self.portals = {} # np.full((self.w, self.h, 2), fill_value=-1, dtype=int)
+        
+        
+    def search_neighbors(self, pos):
+        super().search_neighbors(pos)
+        if pos in self.portals:
+            self.search_cell(self.portals[pos], pos)
+    
+    
+    def distance_heuristic(self, pos1, pos2, orthogonal_cost=10, diagonal_cost=14):
+        """ Calculates distance between cells, with the additional consideration of portal shortcuts.
+            This iteration of the heuristic is more expensive than the original.
+            This iteration (as portals are one-way) is specifically the distance from pos1 to pos2, not vice-versa.
+
+        Args:
+            pos1 (int, int): Cell coordinate.
+            pos2 (int, int): Cell coordinate.
+            orthogonal_cost (int, optional): Cost of horizontal/vertical travel. Defaults to 10.
+            diagonal_cost (int, optional): Cost of diagonal travel. Defaults to 14.
+
+        Returns:
+            int: Heuristic distance between pos1 and pos2.
+        """
+        
+        # TODO: Currently only one portal is considered for each possible path. This should be expanded to consider all possible permutation.
+        
+        # Calculate distance between cell
+        distances = [super().distance_heuristic(pos1, pos2, orthogonal_cost, diagonal_cost)]
+        
+        # Calculate distances from cell to portal entrance and portal exit to end (Distance to end could be precomputed)
+        for s, e in self.portals.items():
+            distances.append(super().distance_heuristic(pos1, s, orthogonal_cost, diagonal_cost) + super().distance_heuristic(e, pos2, orthogonal_cost, diagonal_cost))
+        
+        return min(distances)
+        
+
+                
+        
+
 if __name__ == '__main__':
-    a = A_Star()
+    # Check initialization
+    a1 = A_Star()
+    a2 = A_Star_Portals()
+    a2.portals[(5, 5)] = (10, 10)
+    a2.start_pos = (0, 0)
+    a2.state_grid[0, 0] = 1
+    a2.end_pos = (19, 19)
+    print(a2.distance_heuristic((0, 0), (19, 19)))
+    # a2.step()
