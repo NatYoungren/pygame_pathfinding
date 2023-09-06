@@ -21,24 +21,40 @@ MANUAL_CONTROL = False
 AUTO_STEPS_PER_SECOND = 100
 
 # PATHFINDING VARS
-GRID_W, GRID_H = 32, 24
+GRID_W, GRID_H = 14, 14
 DEFAULT_COST = 1
 WALL_COST = -1
 
-# DISPLAY CONSTANTS
+# DISPLAY VARS
 SQUARE_CELLS = True
 
-# CALCULATED DISPLAY CONSTANTS
+# DISPLAY CONSTANTS
 CELL_W, CELL_H = dv.SCREEN_W / GRID_W, dv.SCREEN_H / GRID_H
 if SQUARE_CELLS: CELL_W = CELL_H = min(CELL_W, CELL_H)
 ORIGIN_X = (dv.SCREEN_W - CELL_W * GRID_W) / 2
 ORIGIN_Y = (dv.SCREEN_H - CELL_H * GRID_H) / 2
+
 PORTAL_COLORS = []
+
+def add_portal_color():
+    PORTAL_COLORS.append(list(np.random.random(size=3) * 256)) # Randomly generate a color for the portal
+
 
 def main():
     sim = A_Star_Portals(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST)
+    # Portal runtime testing:
+    # sim.start_pos = (0, 0)
+    # sim.end_pos = (GRID_W-1, GRID_H-1)
+    # for i in range(1, GRID_W-2):
+    #     sim.portals[(i, i)] = (i+1, i+1)
 
     pg.init()
+    pg.font.init()
+    
+    font = pg.font.Font(dv.TEXT_FONT, dv.TEXT_SIZE)
+    show_text = True
+    text_coords = True
+    
     screen = pg.display.set_mode((dv.SCREEN_W, dv.SCREEN_H))
 
     running = True # Main loop control
@@ -57,6 +73,8 @@ def main():
         # Draw current state of pathfinding sim
         draw_state(screen, sim)
         
+        # TODO: Make input handling into a function
+        
         # Handle input events
         for event in pg.event.get():
             if event.type == pg.QUIT:
@@ -72,7 +90,9 @@ def main():
                 # R key resets the simulation
                 elif event.key == pg.K_r:
                     print('Resetting...')
-                    return main()
+                    sim = A_Star_Portals(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST)
+                    searching = False
+                    # return main()
                 
                 # Spacebar steps the simulation if manual control is enabled
                 elif event.key == pg.K_SPACE and not sim.finished:
@@ -80,7 +100,9 @@ def main():
                         print('Please select a start and end position.')
                         continue
                     
-                    searching = True # If start and end are set, begin searching
+                    elif not searching and not sim.finished:
+                        sim.search_cell(sim.start_pos) # Seed search with start_pos
+                        searching = True # If start and end are set, begin searching
                     
                     # If manual control is enabled, step the simulation
                     if MANUAL_CONTROL and searching:
@@ -97,12 +119,17 @@ def main():
                     # If a portal entrance is set, set the exit and add the portal to the sim
                     else:
                         portal_exit = get_tile(pg.mouse.get_pos())
-                        PORTAL_COLORS.append(list(np.random.random(size=3) * 256)) # Randomly generate a color for the portal
                         sim.portals[temp_portal_entrance] = portal_exit
                         print('Portal created from', temp_portal_entrance, 'to', portal_exit)
                         
                         temp_portal_entrance = None # Reset the temp portal entrance
-                
+                        
+                # TODO: Document
+                elif event.key == pg.K_t:
+                    show_text = not show_text
+                elif event.key == pg.K_y:
+                    text_coords = not text_coords
+
             
             # On left click, set start/end if they are not yet set
             elif event.type == pg.MOUSEBUTTONDOWN:
@@ -112,7 +139,6 @@ def main():
                     
                 elif sim.end_pos is None:
                     sim.end_pos = clicked_tile
-                    sim.search_cell(sim.start_pos) # Seed search with start_pos
 
 
             # TODO: Add realtime wall drawing, allow paths to be cut and altered?
@@ -137,7 +163,31 @@ def main():
             if not sim.finished and not MANUAL_CONTROL and searching and event.type == pg.USEREVENT+1:
                 _ = sim.step()
                 if sim.finished: print(f'Finished in: {sim.step_count} steps. Path had length: {sim.path_length}.')
-                
+
+        # TODO: Move into method
+        if show_text:
+            mouse_pos = pg.mouse.get_pos()
+            clicked_tile = get_tile(mouse_pos)
+            if text_coords:
+                text = f'({clicked_tile[0]}, {clicked_tile[1]})'
+            else:
+                text = ''
+                g_val = sim.g_grid[clicked_tile]
+                h_val = sim.h_grid[clicked_tile]
+
+                if g_val != np.iinfo(int).max:
+                    text += f'   G({g_val})'
+                if h_val != np.iinfo(int).max:
+                    text += f'   H({h_val})'
+                if g_val != np.iinfo(int).max and h_val != np.iinfo(int).max:
+                    text += f'   F({g_val + h_val})'
+
+            text_surface = font.render(text, True, dv.TEXT_COLOR)
+            text_surface.set_alpha(dv.TEXT_ALPHA)
+            rect = text_surface.get_rect()
+            rect.center = np.add(mouse_pos, dv.TEXT_OFFSET)
+            screen.blit(text_surface, rect)
+
         pg.display.flip()
 
 
@@ -181,6 +231,7 @@ def draw_state(screen, sim):
     
     # Draw portals as triangles, with direction indicating entrance/exit
     for i, (p_entrance, p_exit) in enumerate(sim.portals.items()):
+        if i > len(PORTAL_COLORS)-1: add_portal_color() # If a portal has no color, add one.
         # Draw portal entrances.
         x, y = ORIGIN_X + CELL_W * p_entrance[0], ORIGIN_Y + CELL_H * p_entrance[1]
         pg.draw.polygon(screen, PORTAL_COLORS[i], ((x+triangle_inset_w, y+CELL_H-triangle_inset_h), (x+CELL_W-triangle_inset_w, y+CELL_H-triangle_inset_h), (x+int(CELL_W/2), y+triangle_inset_h)))
