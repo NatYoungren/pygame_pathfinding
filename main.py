@@ -2,15 +2,17 @@ import numpy as np
 import pygame as pg
 from a_star import A_Star, A_Star_Portals
 import display_vars as dv
+import time
 # Add game of life
 
 # INSTRUCTIONS:
 # 1. Left click to set start position then end position.
 # 2a. Place walls with left click, remove walls with right click.
 # 2b. Place portal entrances and exits with 'p' key. (Must be paired)
-# 3. Press spacebar to start the simulation.
+# 3. Use 't' key to toggle text display, 'y' key to toggle coordinates/heuristics.
+# 4. Press spacebar to start the simulation.
 #       (Continue to step with spacebar if manual control is enabled)
-# 4. Press 'r' to reset the simulation, or escape to quit.
+# 5. Press 'r' to reset the simulation, or escape to quit.
 
 
 # TODO: Generate a related color pair for each portal pair.
@@ -18,12 +20,16 @@ import display_vars as dv
 
 # CONTROL VARS
 MANUAL_CONTROL = False
-AUTO_STEPS_PER_SECOND = 100
+AUTO_STEPS_PER_SECOND = 1000
 
 # PATHFINDING VARS
-GRID_W, GRID_H = 14, 14
+GRID_W, GRID_H = 25, 25
 DEFAULT_COST = 1
 WALL_COST = -1
+
+# TESTING VARS      # TODO: Clean up testing implementation
+HEURISTIC_MODE_TEST_ARGS = ['standard', 'stored_data', 'no_storage', 'naive']
+TEST_HEURISTIC_MODES = False
 
 # DISPLAY VARS
 SQUARE_CELLS = True
@@ -35,18 +41,26 @@ ORIGIN_X = (dv.SCREEN_W - CELL_W * GRID_W) / 2
 ORIGIN_Y = (dv.SCREEN_H - CELL_H * GRID_H) / 2
 
 PORTAL_COLORS = []
-
 def add_portal_color():
     PORTAL_COLORS.append(list(np.random.random(size=3) * 256)) # Randomly generate a color for the portal
 
 
 def main():
-    sim = A_Star_Portals(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST)
-    # Portal runtime testing:
+    h_mode_test_state = 0
+    start_time, end_time = 0, 0
+    sim = A_Star_Portals(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST, h_mode=HEURISTIC_MODE_TEST_ARGS[h_mode_test_state])
+    
+    
+    # # Portal runtime testing:     # TODO: Clean up testing implementation, make random board generator (maze generator? game of life?)
     # sim.start_pos = (0, 0)
     # sim.end_pos = (GRID_W-1, GRID_H-1)
     # for i in range(1, GRID_W-2):
     #     sim.portals[(i, i)] = (i+1, i+1)
+    # # from copy import deepcopy
+    # # p1 = deepcopy(sim.portal_h)
+    # # p2 = sim.sort_portal_heuristics(seed_h=sim.portal_h)
+    # # for k, v in p1.items():
+    # #     print(k, v, p2[k])
 
     pg.init()
     pg.font.init()
@@ -90,9 +104,9 @@ def main():
                 # R key resets the simulation
                 elif event.key == pg.K_r:
                     print('Resetting...')
-                    sim = A_Star_Portals(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST)
-                    searching = False
-                    # return main()
+                    # sim = A_Star_Portals(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST)
+                    # searching = False
+                    return main()
                 
                 # Spacebar steps the simulation if manual control is enabled
                 elif event.key == pg.K_SPACE and not sim.finished:
@@ -103,6 +117,7 @@ def main():
                     elif not searching and not sim.finished:
                         sim.search_cell(sim.start_pos) # Seed search with start_pos
                         searching = True # If start and end are set, begin searching
+                        start_time = time.time()
                     
                     # If manual control is enabled, step the simulation
                     if MANUAL_CONTROL and searching:
@@ -110,6 +125,7 @@ def main():
                         if sim.finished: print(f'Finished in: {sim.step_count} steps. Path had length: {sim.path_length}.')
                     
                 # 'p' Key places portal entrance and exits
+                # TODO: Allow removal of portals?
                 elif event.key == pg.K_p and not searching and not sim.finished and sim.end_pos is not None:
                     
                      # If no portal entrance is set, set one
@@ -124,12 +140,14 @@ def main():
                         
                         temp_portal_entrance = None # Reset the temp portal entrance
                         
-                # TODO: Document
+                # 't' Key toggles text display
                 elif event.key == pg.K_t:
                     show_text = not show_text
+                    
+                # 'y' Key toggles text content
                 elif event.key == pg.K_y:
                     text_coords = not text_coords
-
+                    
             
             # On left click, set start/end if they are not yet set
             elif event.type == pg.MOUSEBUTTONDOWN:
@@ -189,7 +207,37 @@ def main():
             screen.blit(text_surface, rect)
 
         pg.display.flip()
-
+        
+        # TODO: Move into method/clean up
+        if TEST_HEURISTIC_MODES and sim.finished:
+            end_time = time.time()
+            print(f'\n > Heuristic mode: {HEURISTIC_MODE_TEST_ARGS[h_mode_test_state]}')
+            print('Finished in:', sim.step_count, 'steps.')
+            print('Path had length:', sim.path_length)
+            print('Heuristic count:', sim.heuristic_count)
+            print('Traversed cells:', np.count_nonzero(sim.state_grid == -1))
+            print('Searched cells:', np.count_nonzero(sim.state_grid != 0))
+            print('Total time:', end_time - start_time)
+            print('Average time per step:', (end_time - start_time) / sim.step_count)
+            
+            # Initialize a new sim using the next heuristic mode
+            h_mode_test_state += 1
+            if h_mode_test_state < len(HEURISTIC_MODE_TEST_ARGS):
+                newsim = A_Star_Portals(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST, h_mode=HEURISTIC_MODE_TEST_ARGS[h_mode_test_state])
+                newsim.start_pos = sim.start_pos
+                newsim.end_pos = sim.end_pos
+                newsim.cost_grid = sim.cost_grid
+                newsim.portals = sim.portals
+                newsim.search_cell(sim.start_pos)
+                sim = newsim
+                start_time = time.time()
+            else:
+                running = False
+                main()
+                
+        # print(len(sim.portal_query_counts))
+        # for i, (k, v) in enumerate(sim.portal_query_counts.items()):
+        #     print(i, k, v)
 
 def draw_state(screen, sim):
     screen.fill(dv.BG_COLOR) # Seen in grid lines between cells and empty border space.
@@ -230,6 +278,7 @@ def draw_state(screen, sim):
                 pg.draw.rect(screen, dv.CELL_COLORS[(h + w) % 2], rect_vars)
     
     # Draw portals as triangles, with direction indicating entrance/exit
+    # TODO: Draw partially placed portals
     for i, (p_entrance, p_exit) in enumerate(sim.portals.items()):
         if i > len(PORTAL_COLORS)-1: add_portal_color() # If a portal has no color, add one.
         # Draw portal entrances.
