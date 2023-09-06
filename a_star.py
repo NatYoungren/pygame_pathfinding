@@ -245,6 +245,7 @@ class A_Star_Portals(A_Star):
         self.portals = {}
         # TODO: This currently can only hold a set of heuristics for a single end position, rework.
         self._portal_h = None # Heuristic distance from each portal to the end, (could be precomputed)
+        self.portal_sort_count = 0
         
     # NOTE: Unsure if this is a good way to go, continue to revise
     @property
@@ -283,30 +284,25 @@ class A_Star_Portals(A_Star):
 
         Returns:
             int: Heuristic distance between pos1 and pos2.
-        """
-        # print('pos1', pos1, 'pos2', pos2)
-        
+        """        
         if naive:
             return self.naive_recursive_portal_heuristic(pos1, pos2, portals=self.portals, **kwargs)
-
         
         if pos2 == self.end_pos: # TODO: replace property with a method which handles precalculated vs non-precalculated target points
-            # print('\tEnd pos, using precalculated portal_h')
             p_heuristics = self.portal_h
         else:
-            # print('\tNon-end pos, recalculating portal_h')
             p_heuristics = self.sort_portal_heuristics(target_pos=pos2)
         
         distances = [super().distance_heuristic(pos1, pos2, **kwargs)]
         
         for portal_entry, portal_h in p_heuristics.items():
-            dist = super().distance_heuristic(pos1, portal_entry, **kwargs)
-            # if pos2 == self.end_pos:
-            #     print('\t\tpos1', pos1, 'Portal:', portal_entry, 'dist:', dist, 'portal_h:', portal_h)
-            distances.append(dist + portal_h) # super().distance_heuristic(pos1, portal_entry, **kwargs) + portal_h)
+            distances.append(super().distance_heuristic(pos1, portal_entry, **kwargs) + portal_h)
         
         return min(distances)
     
+    
+    # def get_portal_heuristics(self, target_pos:(int, int)=None):
+        
     
     # TODO: May need to repeat this process until no updates are made.
     def sort_portal_heuristics(self, target_pos:(int, int)=None, seed_h:dict=None): # TODO: Remove reset_h
@@ -321,6 +317,8 @@ class A_Star_Portals(A_Star):
             dict: Dict of heuristic distances from each portal to the target position.
                     Not necessarily shortest paths, unknown.
         """
+        self.portal_sort_count += 1
+
         if target_pos is None:
             target_pos = self.end_pos
         
@@ -337,42 +335,28 @@ class A_Star_Portals(A_Star):
         
         # Sort portals by heuristic distance to the target position, lowest to highest
         sorted_portals = list(sorted(portal_target_heuristics.items(), key=lambda x: x[1]))
-        verbose = False
-        update_count = 0 # NOTE: DEBUG
-        if verbose: print('Sorting', len(sorted_portals), 'portals.')
         
         # For each portal, calculate whether a shortcut exists ONLY through any portals that are closer to the target position
         for i, (p_entry, _) in enumerate(sorted_portals):
-            if verbose: print(i, 'Looping over', p_entry)
             p_exit = self.portals[p_entry]
+            
+            # p_heuristic represents (p_exit -> target_pos)
             p_heuristic = portal_target_heuristics[p_entry]
             
             # Iterate over all subportals that exit closer to the target position
-            for ii, (sub_entry, _) in enumerate(sorted_portals[:i]):
-                if verbose: print('\t', ii, 'Looping over', sub_entry)
+            for subp_entry, _ in sorted_portals[:i]:
                 
-                subp_heuristic = portal_target_heuristics[sub_entry] # Distance from subportal exit to target position
-                dist_to_subportal = super().distance_heuristic(p_exit, sub_entry) # Distance from portal exit to subportal entrance
+                # subp_heuristic represents (subp_entry -> target_pos), and may include other shortcuts if we update portal_target_heuristics
+                subp_heuristic = portal_target_heuristics[subp_entry] 
                 
-                # If (portal_exit -> sub_entry + sub_h) is less than portal_h, a shortcut exists.
-                # sub_h represents (sub_exit -> target_pos), and may contain other shortcuts if we update out portal_h dict.
-                # portal_h represents (portal_exit -> target_pos), and may contain other shortcuts if we update our portal_h dict.
+                dist_to_subportal = super().distance_heuristic(p_exit, subp_entry) # Distance from portal exit to subportal entrance
                 
-                # Update our lowest heuristic distance
-                if verbose and dist_to_subportal + subp_heuristic < p_heuristic:
-                    update_count += 1
-                    print('Shortcut found!', p_entry,'~', p_exit,'->', sub_entry)
-                    new_dist = dist_to_subportal + subp_heuristic
-                    print('[portal_h:', p_heuristic, 'new_dist:', new_dist, '] -> [sub_h:', subp_heuristic, 'dist_to_sub:', dist_to_subportal,']')
-                    p_heuristic = new_dist
-                    
-                else:
-                    p_heuristic = min(p_heuristic, dist_to_subportal + subp_heuristic) # NOTE: Non-debug version
+                # If (portal_exit -> subp_entry + subp_heuristic) is less than p_heuristic, a shortcut exists.
+                p_heuristic = min(p_heuristic, dist_to_subportal + subp_heuristic) # NOTE: Non-debug version
             
-            # Update the portal_h dict with the new heuristic distance, which may affect later calculations
+            # Update the portal_target_heuristics dict with the new heuristic distance, which may affect later calculations
             portal_target_heuristics[p_entry] = p_heuristic
             
-        if verbose: print('Updated', update_count, 'times.')
         
         return portal_target_heuristics
     
