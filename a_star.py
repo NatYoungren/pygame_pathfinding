@@ -238,15 +238,25 @@ class A_Star_Portals(A_Star):
     
     def __init__(self, w:int=20, h:int=20,
                  start_pos:(int, int)=None, end_pos:(int, int)=None,
-                 default_cost:int=1) -> None:
+                 default_cost:int=1,
+                 h_mode='standard', stored_data=False) -> None:
         super().__init__(w, h, start_pos, end_pos, default_cost)
         
         # Dict of portal entrances and exits, stored as (x, y) coordinates
         self.portals = {}
+        
         # TODO: This currently can only hold a set of heuristics for a single end position, rework.
         self._portal_h = None # Heuristic distance from each portal to the end, (could be precomputed)
+        
+        self.stored_portal_h = {} # Dict of precalculated portal heuristics for each queried target position
+        self.portal_query_counts = {}
         self.portal_sort_count = 0
         
+        # # # #
+        # Testing variables
+        self.h_mode = h_mode
+    
+    
     # NOTE: Unsure if this is a good way to go, continue to revise
     @property
     def portal_h(self):
@@ -254,6 +264,7 @@ class A_Star_Portals(A_Star):
             print('Portal_h not yet calculated, calculating now.')
             self._portal_h = self.sort_portal_heuristics(target_pos=self.end_pos)
         return self._portal_h
+    
     
     def search_neighbors(self, pos):
         """ Seach neighbors of a given cell, and if the cell is a portal, search the corresponding exit cell as well.
@@ -268,7 +279,7 @@ class A_Star_Portals(A_Star):
             self.search_cell(self.portals[pos], pos)
     
     
-    def distance_heuristic(self, pos1, pos2, naive=False, **kwargs):
+    def distance_heuristic(self, pos1, pos2, **kwargs):
         """ Calculates distance between cells, with the additional consideration of multi-portal shortcuts.
                 This version of the heuristic is more expensive than the original.
                 This version (as portals are one-way) is specifically the distance from pos1 to pos2, not vice-versa.
@@ -284,14 +295,29 @@ class A_Star_Portals(A_Star):
 
         Returns:
             int: Heuristic distance between pos1 and pos2.
-        """        
-        if naive:
+        """
+        
+        # 'naive' employs a slow recursive O(n!) algorithm where n is the number of portals
+        if self.h_mode == 'naive':
             return self.naive_recursive_portal_heuristic(pos1, pos2, portals=self.portals, **kwargs)
         
-        if pos2 == self.end_pos: # TODO: replace property with a method which handles precalculated vs non-precalculated target points
-            p_heuristics = self.portal_h
-        else:
+        # 'no_storage' uses a more efficient algorithm to push below O(n^2)
+        if self.h_mode == 'no_storage':
             p_heuristics = self.sort_portal_heuristics(target_pos=pos2)
+        
+        # 'stored_data' stores all calculated portal heuristics, and reuses them if the target position has been queried before
+        # This approach is the only one with scaling memory usage, but also performs the least heuristic calculations
+        elif self.h_mode == 'stored_data':
+            p_heuristics = self.get_portal_heuristics(pos2)
+        
+        # 'standard' stores and reuses the heuristic distances from each portal to the end position
+        # All other target points are calculated as needed
+        else:
+            # Standard mode, always recalculate portal heuristics for non-end_pos targets
+            if pos2 == self.end_pos: # TODO: replace property with a method which handles precalculated vs non-precalculated target points
+                p_heuristics = self.portal_h
+            else:
+                p_heuristics = self.sort_portal_heuristics(target_pos=pos2)
         
         distances = [super().distance_heuristic(pos1, pos2, **kwargs)]
         
@@ -301,7 +327,21 @@ class A_Star_Portals(A_Star):
         return min(distances)
     
     
-    # def get_portal_heuristics(self, target_pos:(int, int)=None):
+    # TODO: Document
+    def get_portal_heuristics(self, target_pos:(int, int)):
+        """ If stored heuristics exist, use them otherwise calculate them.
+
+        Args:
+            target_pos (int, int): Target position for heuristics.
+
+        Returns:
+            dict: Dict of (int, int) coords to heuristic distances.
+        """
+        self.portal_query_counts[target_pos] = self.portal_query_counts.get(target_pos, 0) + 1
+        
+        if target_pos not in self.stored_portal_h:
+            self.stored_portal_h[target_pos] = self.sort_portal_heuristics(target_pos)
+        return self.stored_portal_h[target_pos]
         
     
     # TODO: May need to repeat this process until no updates are made.
@@ -315,7 +355,7 @@ class A_Star_Portals(A_Star):
 
         Returns:
             dict: Dict of heuristic distances from each portal to the target position.
-                    Not necessarily shortest paths, unknown.
+                    NOTE: Have not verified that they are always shortest paths.
         """
         self.portal_sort_count += 1
 
@@ -357,9 +397,13 @@ class A_Star_Portals(A_Star):
             # Update the portal_target_heuristics dict with the new heuristic distance, which may affect later calculations
             portal_target_heuristics[p_entry] = p_heuristic
             
-        
         return portal_target_heuristics
     
+    # 10
+    
+    # 10 * 9 * 8 * 7 * 6 * 5 * 4 * 3 * 2 * 1
+    
+    # 
     
     # NOTE: No longer used, seemingly accurate but too resource instensive with many portals
     def naive_recursive_portal_heuristic(self, pos1, pos2, portals=None, **kwargs):
