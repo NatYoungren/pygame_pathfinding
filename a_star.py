@@ -63,7 +63,6 @@ class A_Star():
             (int, int): Coordinate of cell traversed. None, if no more cells can be traversed.
         """
 
-        # TODO: Add a finished flag to the class, to prevent further steps after the end has been found.
         if self.finished:
             print('End has been found, no more steps will be taken.')
             return self.end_pos
@@ -137,6 +136,7 @@ class A_Star():
         
         # If cell has already been traversed, abort.
         if self.state_grid[pos] == -1:
+            # NOTE: This should only happen if we start modifying the terrain at runtime, or introduce new features.
             return
         
         # If we have not yet calculated the distance from this cell to the end, do so now
@@ -179,7 +179,7 @@ class A_Star():
             return self.g_grid[prev_pos] + self.distance_heuristic(prev_pos, pos) * self.cost_grid[pos]
     
     
-    def distance_heuristic(self, pos1, pos2, orthogonal_cost=10, diagonal_cost=14):
+    def distance_heuristic(self, pos1, pos2, orthogonal_cost=10, diagonal_cost=14, increment_count=True):
         """ Provides a heuristic distance between 2 cells, assuming no obstructions.
             One cell of diagonal movement costs 14, horizontal/vertical movement is 10.
                 > This is roughly sqrt(2) and 1, upscaled to remove float innacuracy.
@@ -190,11 +190,12 @@ class A_Star():
             pos2 (int, int): Cell coordinate.
             orthogonal_cost (int, optional): Cost of horizontal/vertical travel. Defaults to 10.
             diagonal_cost (int, optional): Cost of diagonal travel. Defaults to 14.
+            increment_count(bool, optional): If True, increment the heuristic_count. Defaults to True.
 
         Returns:
             int: Heuristic distance between pos1 and pos2.
         """
-        self.heuristic_count += 1
+        self.heuristic_count += increment_count
         
         # Convert to distance vector
         vector = np.abs(np.array(pos1) - np.array(pos2))
@@ -230,6 +231,9 @@ class A_Star():
 #
 #
 
+# TODO: Is there a hidden path length cost through portals?
+#       Do we incorrectly assume that portals are free by calculating from their exits?
+
 class A_Star_Portals(A_Star):
     
     def __init__(self, w:int=20, h:int=20,
@@ -239,7 +243,16 @@ class A_Star_Portals(A_Star):
         
         # Dict of portal entrances and exits, stored as (x, y) coordinates
         self.portals = {}
+        # TODO: This currently can only hold a set of heuristics for a single end position, rework.
+        self._portal_h = None # Heuristic distance from each portal to the end, (could be precomputed)
         
+    # NOTE: Unsure if this is a good way to go, continue to revise
+    @property
+    def portal_h(self):
+        if self._portal_h is None or len(self._portal_h) != len(self.portals):
+            print('Portal_h not yet calculated, calculating now.')
+            self._portal_h = self.sort_portal_heuristics(target_pos=self.end_pos)
+        return self._portal_h
     
     def search_neighbors(self, pos):
         """ Seach neighbors of a given cell, and if the cell is a portal, search the corresponding exit cell as well.
@@ -252,9 +265,9 @@ class A_Star_Portals(A_Star):
         # If the cell is a portal, search the corresponding exit cell as well.
         if pos in self.portals:
             self.search_cell(self.portals[pos], pos)
-            
     
-    def distance_heuristic(self, pos1, pos2, orthogonal_cost=10, diagonal_cost=14):
+    
+    def distance_heuristic(self, pos1, pos2, naive=False, **kwargs):
         """ Calculates distance between cells, with the additional consideration of multi-portal shortcuts.
                 This version of the heuristic is more expensive than the original.
                 This version (as portals are one-way) is specifically the distance from pos1 to pos2, not vice-versa.
@@ -262,17 +275,110 @@ class A_Star_Portals(A_Star):
         Args:
             pos1 (int, int): Cell coordinate.
             pos2 (int, int): Cell coordinate.
-            orthogonal_cost (int, optional): Cost of horizontal/vertical travel. Defaults to 10.
-            diagonal_cost (int, optional): Cost of diagonal travel. Defaults to 14.
+            naive (bool, optional): If True, use the naive recursive portal heuristic. Defaults to False.
+            **kwargs: Additional arguments to pass to super().distance_heuristic()
+                > orthogonal_cost (int, optional): Cost of horizontal/vertical travel. Defaults to 10.
+                > diagonal_cost (int, optional): Cost of diagonal travel. Defaults to 14.
+                > increment_count(bool, optional): If True, increment the heuristic_count. Defaults to True.
 
         Returns:
             int: Heuristic distance between pos1 and pos2.
         """
+        # print('pos1', pos1, 'pos2', pos2)
         
-        return self.recursive_portal_heuristic(pos1, pos2, portals=self.portals, orthogonal_cost=orthogonal_cost, diagonal_cost=diagonal_cost)
+        if naive:
+            return self.naive_recursive_portal_heuristic(pos1, pos2, portals=self.portals, **kwargs)
+
+        
+        if pos2 == self.end_pos: # TODO: replace property with a method which handles precalculated vs non-precalculated target points
+            # print('\tEnd pos, using precalculated portal_h')
+            p_heuristics = self.portal_h
+        else:
+            # print('\tNon-end pos, recalculating portal_h')
+            p_heuristics = self.sort_portal_heuristics(target_pos=pos2)
+        
+        distances = [super().distance_heuristic(pos1, pos2, **kwargs)]
+        
+        for portal_entry, portal_h in p_heuristics.items():
+            dist = super().distance_heuristic(pos1, portal_entry, **kwargs)
+            # if pos2 == self.end_pos:
+            #     print('\t\tpos1', pos1, 'Portal:', portal_entry, 'dist:', dist, 'portal_h:', portal_h)
+            distances.append(dist + portal_h) # super().distance_heuristic(pos1, portal_entry, **kwargs) + portal_h)
+        
+        return min(distances)
     
     
-    def recursive_portal_heuristic(self, pos1, pos2, portals={}, **kwargs):
+    # TODO: May need to repeat this process until no updates are made.
+    def sort_portal_heuristics(self, target_pos:(int, int)=None, seed_h:dict=None): # TODO: Remove reset_h
+        """ Precalculate the heuristic distance from each portal to the target position.
+
+        Args:
+            target_pos ((int, int), optional): Target cell coordinate. Defaults to None.
+            seed_h (dict, optional): Initial set of heuristic distances from each portal. Defaults to None.
+                # TODO: Automatically search for a seed_h based on target_pos?
+
+        Returns:
+            dict: Dict of heuristic distances from each portal to the target position.
+                    Not necessarily shortest paths, unknown.
+        """
+        if target_pos is None:
+            target_pos = self.end_pos
+        
+        if seed_h is None:
+            portal_target_heuristics = {}
+        else:
+            portal_target_heuristics = seed_h
+        
+        # Calculate and store the direct heuristic distance from each portal exit to the target position
+        #   This is the value we will try to reduce via portal shortcuts
+        for p_entry, p_exit in self.portals.items():
+            if p_entry not in portal_target_heuristics: # Add all unseeded portals
+                portal_target_heuristics[p_entry] = super().distance_heuristic(p_exit, target_pos)
+        
+        # Sort portals by heuristic distance to the target position, lowest to highest
+        sorted_portals = list(sorted(portal_target_heuristics.items(), key=lambda x: x[1]))
+        verbose = False
+        update_count = 0 # NOTE: DEBUG
+        if verbose: print('Sorting', len(sorted_portals), 'portals.')
+        
+        # For each portal, calculate whether a shortcut exists ONLY through any portals that are closer to the target position
+        for i, (p_entry, _) in enumerate(sorted_portals):
+            if verbose: print(i, 'Looping over', p_entry)
+            p_exit = self.portals[p_entry]
+            p_heuristic = portal_target_heuristics[p_entry]
+            
+            # Iterate over all subportals that exit closer to the target position
+            for ii, (sub_entry, _) in enumerate(sorted_portals[:i]):
+                if verbose: print('\t', ii, 'Looping over', sub_entry)
+                
+                subp_heuristic = portal_target_heuristics[sub_entry] # Distance from subportal exit to target position
+                dist_to_subportal = super().distance_heuristic(p_exit, sub_entry) # Distance from portal exit to subportal entrance
+                
+                # If (portal_exit -> sub_entry + sub_h) is less than portal_h, a shortcut exists.
+                # sub_h represents (sub_exit -> target_pos), and may contain other shortcuts if we update out portal_h dict.
+                # portal_h represents (portal_exit -> target_pos), and may contain other shortcuts if we update our portal_h dict.
+                
+                # Update our lowest heuristic distance
+                if verbose and dist_to_subportal + subp_heuristic < p_heuristic:
+                    update_count += 1
+                    print('Shortcut found!', p_entry,'~', p_exit,'->', sub_entry)
+                    new_dist = dist_to_subportal + subp_heuristic
+                    print('[portal_h:', p_heuristic, 'new_dist:', new_dist, '] -> [sub_h:', subp_heuristic, 'dist_to_sub:', dist_to_subportal,']')
+                    p_heuristic = new_dist
+                    
+                else:
+                    p_heuristic = min(p_heuristic, dist_to_subportal + subp_heuristic) # NOTE: Non-debug version
+            
+            # Update the portal_h dict with the new heuristic distance, which may affect later calculations
+            portal_target_heuristics[p_entry] = p_heuristic
+            
+        if verbose: print('Updated', update_count, 'times.')
+        
+        return portal_target_heuristics
+    
+    
+    # NOTE: No longer used, seemingly accurate but too resource instensive with many portals
+    def naive_recursive_portal_heuristic(self, pos1, pos2, portals=None, **kwargs):
         """ Recursive function to calculate the heuristic distance between two cells, considering portal permutations.
                 Runtime is O(n!) where n is the number of portals, could potentially be improved.
                 One possibility is to store the shortest distance to each portal, and only recurse if that distance can be reduced.
@@ -280,11 +386,15 @@ class A_Star_Portals(A_Star):
         Args:
             pos1 (int, int): Cell coordinate.
             pos2 (int, int): Cell coordinate.
-            portals (dict, optional): Dict of remaining portals to try, reduced by each recursion. Defaults to {}.
+            portals (dict, optional): Dict of remaining portals to try, reduced by each recursion. Defaults to None.
 
         Returns:
             int: Heuristic distance between pos1 and pos2
         """
+        
+        if portals is None:
+            portals = self.portals
+            
         # Begin with the heuristic distance between the two cells
         shortest_dist = super().distance_heuristic(pos1, pos2, **kwargs)
         
@@ -301,15 +411,14 @@ class A_Star_Portals(A_Star):
                 sub_portals = {en:ex for en, ex in portals.items() if en != portal_entry} # TODO: Is there a faster way to do this?
 
                 # Recursively calculate distance from portal exit to pos2, considering all unused portals
-                from_exit = self.recursive_portal_heuristic(portal_exit, pos2, sub_portals, **kwargs)
+                from_exit = self.naive_recursive_portal_heuristic(portal_exit, pos2, sub_portals, **kwargs)
 
                 # Retain the shortest distance found so far
                 shortest_dist = min(shortest_dist, to_entrance + from_exit)
         
         return shortest_dist
-
-        
-
+    
+    
 if __name__ == '__main__':
     # Check initialization
     a1 = A_Star()
