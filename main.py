@@ -28,8 +28,8 @@ DEFAULT_COST = 1
 WALL_COST = -1
 
 # TESTING VARS      # TODO: Clean up testing implementation
-HEURISTIC_MODE_TEST_ARGS = ['standard', 'stored_data', 'no_storage', 'naive']
-TEST_HEURISTIC_MODES = False
+HEURISTIC_MODE_TEST_ARGS = ['standard', 'store_all', 'store_none', 'naive']
+TEST_HEURISTIC_MODES = True # FIX THIS
 
 # DISPLAY VARS
 SQUARE_CELLS = True
@@ -233,11 +233,10 @@ def main():
                 start_time = time.time()
             else:
                 running = False
+                input()
                 main()
-                
-        # print(len(sim.portal_query_counts))
-        # for i, (k, v) in enumerate(sim.portal_query_counts.items()):
-        #     print(i, k, v)
+                return
+
 
 def draw_state(screen, sim):
     screen.fill(dv.BG_COLOR) # Seen in grid lines between cells and empty border space.
