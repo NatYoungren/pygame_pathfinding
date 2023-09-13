@@ -1,3 +1,6 @@
+# Nathaniel Alden Homans Youngren
+# September 13, 2023
+
 import numpy as np
 
 # Display vars
