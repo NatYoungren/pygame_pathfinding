@@ -87,7 +87,6 @@ class A_Star():
         self.state_grid[next_pos] = -1                      # Mark cell as traversed
         
         self.step_count += 1                                # Increment step counter
-        # self.finished = next_pos == self.end_pos            # Check if end has been reached
         self.last_path = self.reconstruct_path(next_pos)    # Reconstruct path to cell
         
         self.path_length = max(self.path_length, self.g_grid[next_pos]/10)  # Divide by 10 to remove the heuristic scalar
