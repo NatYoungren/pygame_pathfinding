@@ -26,7 +26,8 @@ from time import time
 class A_Star():
     
     def __init__(self, w:int=20, h:int=20,
-                 start_pos:(int, int)=None, end_pos:(int, int)=None,
+                 start_pos:(int, int)=None,
+                 end_pos:(int, int)=None,
                  default_cost:int=1) -> None:
         
         # Pathfinding variables
