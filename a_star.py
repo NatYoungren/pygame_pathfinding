@@ -30,7 +30,7 @@ class A_Star():
                  default_cost:int=1) -> None:
         
         # Pathfinding variables
-        self.w, self.h = w, h               # Width and height of grid
+        self.w, self.h = w, h               # Width and height of cell grid
         self.start_pos = start_pos          # Start position
         self.end_pos = end_pos              # End position
         self.default_cost = default_cost    # Default cost multiplier of moving through a cell
@@ -48,9 +48,9 @@ class A_Star():
         self.step_count = 0      # Number of steps taken
         self.step_time = 0       # Cumulative time spent stepping
         self.heuristic_count = 0 # Number of times a distance heuristic has been calculated
-        self.last_path = []      # List of cells traversed in the last step
         self.path_length = 0     # Length of the path found
-        
+        self.last_path = []      # List of cells traversed in the last step
+
         
     @property
     def f_grid(self):
