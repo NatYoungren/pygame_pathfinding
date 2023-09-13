@@ -18,6 +18,7 @@ import display_vars as dv
 # 5. Press 'r' to reset the simulation, or escape to quit.
 #       (Additional controls are listed below)
 
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                   # ALL CONTROLS: #                     #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -66,22 +67,21 @@ STATE_DICT =   {'manual_control': False,    # If true, manual control is enabled
                 'resetting': True,          # Reset pathfinding flag
                 
                 'temp_portal': None,        # Temp var to store portal start position during portal creation
-                
-                'steps_per_frame': 0        # Maximum steps per frame update (if < 1, no limit)
                 }
 
 # CONTROL VARS
-STEPS_PER_SECOND = 1000
+STEPS_PER_SECOND = 20       # Number of steps per second (if manual control is disabled)
+STEPS_PER_FRAME = 0         # Maximum steps per frame update (if < 1, no limit)
 
 # PATHFINDING VARS
-GRID_W, GRID_H = 25, 25
-DEFAULT_COST = 1
+GRID_W, GRID_H = 25, 25     # Grid size
+DEFAULT_COST = 1            # Default cost of cells
 
 # TESTING VARS
 HEURISTIC_MODE_TEST_ARGS = ['standard', 'store_all', 'store_none', 'naive']
 
 # DISPLAY VARS
-SQUARE_CELLS = True
+SQUARE_CELLS = True         # If true, cells will always be square
 
 # DISPLAY CONSTANTS
 CELL_W, CELL_H = dv.SCREEN_W / GRID_W, dv.SCREEN_H / GRID_H
@@ -89,7 +89,7 @@ if SQUARE_CELLS: CELL_W = CELL_H = min(CELL_W, CELL_H)
 ORIGIN_X = (dv.SCREEN_W - CELL_W * GRID_W) / 2
 ORIGIN_Y = (dv.SCREEN_H - CELL_H * GRID_H) / 2
 
-PORTAL_COLORS = []
+PORTAL_COLORS = [] # Used to store randomly generated portal colors
 def add_portal_color():
     PORTAL_COLORS.append(list(np.random.random(size=3) * 256)) # Randomly generate a color for the portal
 
@@ -98,12 +98,6 @@ def main():
     # Var to store the current pathfinding simulation
     sim = None
     
-    # # Portal runtime testing:     # TODO: Clean up testing implementation, make random board generator (maze generator? game of life?)
-    # sim.start_pos = (0, 0)
-    # sim.end_pos = (GRID_W-1, GRID_H-1)
-    # for i in range(1, GRID_W-2):
-    #     sim.portals[(i, i)] = (i+1, i+1)
-
     # Initialize pygame window
     pg.init()
     screen = pg.display.set_mode((dv.SCREEN_W, dv.SCREEN_H))
@@ -191,7 +185,7 @@ def parse_events(sim: A_Star_Portals):
         
         # If searching, and manual control is disabled, step the simulation on a timer
         elif event.type == pg.USEREVENT+1:
-            if not 0 < STATE_DICT['steps_per_frame'] <= step_count:
+            if not 0 < STEPS_PER_FRAME <= step_count:
                 if not sim.finished and not STATE_DICT['manual_control'] and STATE_DICT['searching']:
                     _ = sim.step()
                     step_count += 1
@@ -282,7 +276,7 @@ def parse_events(sim: A_Star_Portals):
                 
                 # If manual control is enabled, step the simulation
                 if STATE_DICT['manual_control'] and not sim.finished:
-                    if not 0 < STATE_DICT['steps_per_frame'] <= step_count:
+                    if not 0 < STEPS_PER_FRAME <= step_count:
                         _ = sim.step()
                         step_count += 1
                     
@@ -341,6 +335,14 @@ def parse_events(sim: A_Star_Portals):
 
 
 def draw_state(surf, sim):
+    """ Draw the current state of the pathfinding simulation to the given surface.
+        Renders the contents of each cell, minimizing draw calls.
+        Portals are drawn as paired triangles, with direction indicating entrance/exit.
+
+    Args:
+        surf (pygame.Surface): Surface to draw to (presumably the screen).
+        sim (A_Star_Portals): Simulation from which to get state information.
+    """
     surf.fill(dv.BG_COLOR) # Used for grid lines between cells and empty border space.
     
     # This loop is optimized to reduce the number of draw calls to 1 per cell. (Excepting portals)
