@@ -1,4 +1,5 @@
 import numpy as np
+from time import time
 
 # NOTE: INSTRUCTIONS
 #
@@ -46,6 +47,7 @@ class A_Star():
         # # #
         
         self.step_count = 0      # Number of steps taken
+        self.step_time = 0       # Cumulative time spent stepping
         self.heuristic_count = 0 # Number of times a distance heuristic has been calculated
         self.last_path = []      # List of cells traversed in the last step
         self.path_length = 0     # Length of the path found
@@ -73,6 +75,8 @@ class A_Star():
             self.last_path = []
             return None                                     # NOTE: Could also return start_pos
         
+        st = time()                                         # Start timer
+        
         next_pos = self.select_next_pos()                   # Find next cell to traverse
         self.search_neighbors(next_pos)                     # Add neighbors to searched cells
         self.state_grid[next_pos] = -1                      # Mark cell as traversed
@@ -82,6 +86,8 @@ class A_Star():
         self.last_path = self.reconstruct_path(next_pos)    # Reconstruct path to cell
         
         self.path_length = max(self.path_length, self.g_grid[next_pos]/10)  # Divide by 10 to remove the heuristic scalar
+        
+        self.step_time += time() - st                       # Stop timer and add to cumulative time
         
         return next_pos
 
@@ -261,9 +267,6 @@ class A_Star_Portals(A_Star):
         # Dict of portal entrances and exits, stored as (x, y) coordinates
         self.portals = {}
         
-        # TODO: This currently can only hold a set of heuristics for a single end position, rework.
-        self._portal_h = None # Heuristic distance from each portal to the end, (could be precomputed)
-        
         self.stored_portal_h = {} # Dict of precalculated portal heuristics for each queried target position
         self.portal_query_counts = {}
         self.portal_sort_count = 0
@@ -272,14 +275,7 @@ class A_Star_Portals(A_Star):
         # Testing variables
         self.h_mode = h_mode
     
-    
-    # NOTE: Unsure if this is a good way to go, continue to revise
-    @property
-    def portal_h(self):
-        if self._portal_h is None or len(self._portal_h) != len(self.portals):
-            print('Portal_h not yet calculated, calculating now.')
-            self._portal_h = self.sort_portal_heuristics(target_pos=self.end_pos)
-        return self._portal_h
+
     
     
     def search_neighbors(self, pos):
@@ -329,9 +325,8 @@ class A_Star_Portals(A_Star):
         # 'standard' stores and reuses the heuristic distances from each portal to the end position
         # All other target points are calculated as needed
         else:
-            # Standard mode, always recalculate portal heuristics for non-end_pos targets
-            if pos2 == self.end_pos: # TODO: replace property with a method which handles precalculated vs non-precalculated target points
-                p_heuristics = self.portal_h
+            if pos2 == self.end_pos:
+                p_heuristics = self.get_portal_heuristics(target_pos=pos2)
             else:
                 p_heuristics = self.sort_portal_heuristics(target_pos=pos2)
         
