@@ -3,7 +3,9 @@ import pygame as pg
 from a_star import A_Star_Portals
 import display_vars as dv
 
-# INSTRUCTIONS:
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#                   # INSTRUCTIONS: #                     #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # 1. Left click to set start position and end position.
 
 # 2. Set cell costs with left click, reset costs with right click. (Select cost with 0-9 keys)
@@ -11,12 +13,14 @@ import display_vars as dv
 # 3. Place portal entrances and exits with 'p' key. (Must be paired)
 
 # 4. Press spacebar to start the simulation.
-#       (Continue to step with spacebar if manual control is enabled)
+#       (Continue to step with spacebar if manual control is enabled, toggle to manual with 'm' key)
 
 # 5. Press 'r' to reset the simulation, or escape to quit.
+#       (Additional controls are listed below)
 
-
-# ALL CONTROLS:
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#                   # ALL CONTROLS: #                     #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # m1 -> Set start position, then end position, then change cell cost
 # m2 -> Reset cells to default cost
 
@@ -29,7 +33,7 @@ import display_vars as dv
 # 'g' -> Toggle path display
 
 # 't' -> Toggle text display
-# 'y' -> Toggle text content (coords, cost, heuristics)
+# 'y' -> Toggle text content (coords, cost/portal, heuristics)
 
 # 'm' -> Toggle manual control
 # 't' -> Toggle heuristic testing
@@ -41,20 +45,11 @@ import display_vars as dv
 
 # TODO: Add controls and color gradients for difficult terrain.
 
-# CONTROL VARS
-STEPS_PER_SECOND = 1000
 
-# PATHFINDING VARS
-GRID_W, GRID_H = 25, 25
-DEFAULT_COST = 1
-
-# TESTING VARS
-HEURISTIC_MODE_TEST_ARGS = ['standard', 'store_all', 'store_none', 'naive']
-
-
+# Dict to track state information, avoids individual global variables or passing/returning many arguments.
 STATE_DICT =   {'manual_control': False,    # If true, manual control is enabled (If false, auto-step is enabled)
                 
-                'test_heuristics': False,    # If true, test all heuristic modes and print results.
+                'test_heuristics': False,    # If true, cycle through all heuristic modes and print results.
                 'heuristic_test_index': 0,  # Index of current heuristic mode being tested
                 
                 'cell_cost': -1,            # Cost of cells placed with left click
@@ -75,6 +70,15 @@ STATE_DICT =   {'manual_control': False,    # If true, manual control is enabled
                 'steps_per_frame': 0        # Maximum steps per frame update (if < 1, no limit)
                 }
 
+# CONTROL VARS
+STEPS_PER_SECOND = 1000
+
+# PATHFINDING VARS
+GRID_W, GRID_H = 25, 25
+DEFAULT_COST = 1
+
+# TESTING VARS
+HEURISTIC_MODE_TEST_ARGS = ['standard', 'store_all', 'store_none', 'naive']
 
 # DISPLAY VARS
 SQUARE_CELLS = True
