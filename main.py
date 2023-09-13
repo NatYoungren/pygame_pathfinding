@@ -1,28 +1,29 @@
 import numpy as np
 import pygame as pg
-from a_star import A_Star, A_Star_Portals
+from a_star import A_Star_Portals
 import display_vars as dv
-import time
-# Add game of life
 
 # INSTRUCTIONS:
-# 1. Left click to set start position then end position.
-# 2a. Place walls with left click, remove walls with right click.
-# 2b. Place portal entrances and exits with 'p' key. (Must be paired)
-# 3. Use 't' key to toggle text display, 'y' key to toggle coordinates/heuristics.
+# 1. Left click to set start position and end position.
+
+# 2. Set cell costs with left click, reset costs with right click. (Select cost with 0-9 keys)
+
+# 3. Place portal entrances and exits with 'p' key. (Must be paired)
+
 # 4. Press spacebar to start the simulation.
 #       (Continue to step with spacebar if manual control is enabled)
+
 # 5. Press 'r' to reset the simulation, or escape to quit.
 
 
-# CONTROLS:
-# m1 -> Set start position, then end position, then change tile cost
-# m2 -> Reset tiles to default cost
+# ALL CONTROLS:
+# m1 -> Set start position, then end position, then change cell cost
+# m2 -> Reset cells to default cost
 
 # 'p' -> Place portal entrance and exit
 
-# '1' ... '9' -> Change cost of placed tiles to 1 - 9
-# '0' -> Change cost of placed tiles to -1 (walls)
+# '1' ... '9' -> Change cost of placed cells to 1 - 9
+# '0' -> Change cost of placed cells to -1 (walls)
 
 # 'f' -> Toggle search display
 # 'g' -> Toggle path display
@@ -30,7 +31,7 @@ import time
 # 't' -> Toggle text display
 # 'y' -> Toggle text content (coords, cost, heuristics)
 
-# '~' -> Toggle manual control
+# 'm' -> Toggle manual control
 # 't' -> Toggle heuristic testing
 # 'h' -> Toggle heuristic mode manually
 
@@ -53,10 +54,10 @@ HEURISTIC_MODE_TEST_ARGS = ['standard', 'store_all', 'store_none', 'naive']
 
 STATE_DICT =   {'manual_control': False,    # If true, manual control is enabled (If false, auto-step is enabled)
                 
-                'test_heuristics': True,    # If true, test all heuristic modes and print results.
+                'test_heuristics': False,    # If true, test all heuristic modes and print results.
                 'heuristic_test_index': 0,  # Index of current heuristic mode being tested
                 
-                'tile_cost': -1,            # Cost of tiles placed with left click
+                'cell_cost': -1,            # Cost of cells placed with left click
                 
                 'show_text': True,          # If true, show text on mouseover
                 'text_content': 0,          # 0 = coords, 1 = cost/portal, 2 = heuristics,
@@ -67,7 +68,7 @@ STATE_DICT =   {'manual_control': False,    # If true, manual control is enabled
                 # Internal state vars
                 'running': True,            # Main loop control
                 'searching': False,         # Pathfinding loop control
-                'resetting': True,          # Reset pathfinding control
+                'resetting': True,          # Reset pathfinding flag
                 
                 'temp_portal': None,        # Temp var to store portal start position during portal creation
                 
@@ -193,12 +194,12 @@ def parse_events(sim: A_Star_Portals):
                     
         # On left click, set start/end if they are not yet set
         elif event.type == pg.MOUSEBUTTONDOWN:
-            clicked_tile = get_tile(event.pos)
+            clicked_cell = get_cell(event.pos)
             if sim.start_pos is None:
-                sim.start_pos = clicked_tile
+                sim.start_pos = clicked_cell
                 
             elif sim.end_pos is None:
-                sim.end_pos = clicked_tile
+                sim.end_pos = clicked_cell
                 
         # Handle keypresses
         elif event.type == pg.KEYDOWN:
@@ -257,12 +258,12 @@ def parse_events(sim: A_Star_Portals):
                 print('Show search:', STATE_DICT['show_search'])
                 
             # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-            # 0-9 Keys set tile cost, 0 sets to -1 (walls)
+            # 0-9 Keys set cell cost, 0 sets to -1 (walls)
             elif event.key in [pg.K_0, pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9]:
                 i = [pg.K_0, pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9].index(event.key)
                 if i == 0: i = -1
-                STATE_DICT['tile_cost'] = i
-                print('Tile cost:', STATE_DICT['tile_cost'])
+                STATE_DICT['cell_cost'] = i
+                print('Cell cost:', STATE_DICT['cell_cost'])
             
             # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
             # Spacebar begins the simulation (also steps if manual control is enabled)
@@ -290,7 +291,7 @@ def parse_events(sim: A_Star_Portals):
                 
                 # If no portal entrance is stored, set one
                 if STATE_DICT['temp_portal'] is None:
-                    portal_entrance = get_tile(pg.mouse.get_pos())
+                    portal_entrance = get_cell(pg.mouse.get_pos())
                     STATE_DICT['temp_portal'] = portal_entrance
                     
                     # Remove any existing portal at the new location (and its color)
@@ -301,7 +302,7 @@ def parse_events(sim: A_Star_Portals):
                     
                 # If a portal entrance is stored, add the portal to the sim
                 else:
-                    portal_exit = get_tile(pg.mouse.get_pos())
+                    portal_exit = get_cell(pg.mouse.get_pos())
                     
                     # Abort if the portal entrance and exit are the same
                     if portal_exit != STATE_DICT['temp_portal']:
@@ -316,16 +317,16 @@ def parse_events(sim: A_Star_Portals):
             try:
                 clicks = pg.mouse.get_pressed()
                 if any(clicks):
-                    clicked_tile = get_tile(pg.mouse.get_pos())
+                    clicked_cell = get_cell(pg.mouse.get_pos())
 
-                    if clicked_tile == sim.start_pos or clicked_tile == sim.end_pos:
+                    if clicked_cell == sim.start_pos or clicked_cell == sim.end_pos:
                         continue
                     
-                    if clicks[0]: # Left click changes tile cost
-                        sim.cost_grid[clicked_tile[0], clicked_tile[1]] = STATE_DICT['tile_cost']
+                    if clicks[0]: # Left click changes cell cost
+                        sim.cost_grid[clicked_cell[0], clicked_cell[1]] = STATE_DICT['cell_cost']
                         
-                    elif clicks[2]: # Right click resets tile to default
-                        sim.cost_grid[clicked_tile[0], clicked_tile[1]] = DEFAULT_COST
+                    elif clicks[2]: # Right click resets cell to default
+                        sim.cost_grid[clicked_cell[0], clicked_cell[1]] = DEFAULT_COST
 
             except AttributeError:
                 pass
@@ -419,21 +420,21 @@ def draw_mouse_text(surf, font, sim):
         sim (A_Star_Portals): Pathfinding simulation to get heuristics from.
     """
     mouse_pos = pg.mouse.get_pos()
-    clicked_tile = get_tile(mouse_pos)
+    clicked_cell = get_cell(mouse_pos)
     text_pos = np.add(mouse_pos, dv.TEXT_OFFSET)
 
     if STATE_DICT['text_content'] == 0:
-        text = f'{clicked_tile}'
+        text = f'{clicked_cell}'
         
     elif STATE_DICT['text_content'] == 1:
-        text = f'C({sim.cost_grid[clicked_tile]})'
-        if clicked_tile in sim.portals:
-            text += f'  P{sim.portals[clicked_tile]}'
+        text = f'C({sim.cost_grid[clicked_cell]})'
+        if clicked_cell in sim.portals:
+            text += f'  P{sim.portals[clicked_cell]}'
         
     elif STATE_DICT['text_content'] == 2:
         text = ''
-        g_val = sim.g_grid[clicked_tile]
-        h_val = sim.h_grid[clicked_tile]
+        g_val = sim.g_grid[clicked_cell]
+        h_val = sim.h_grid[clicked_cell]
         
         if g_val != np.iinfo(int).max:
             text += f'G({g_val})'
@@ -463,7 +464,7 @@ def draw_text(surf, text, pos, font, color, alpha):
     surf.blit(text_surface, rect)
 
 
-def get_tile(pos):
+def get_cell(pos):
     """ Convert pixel coordinates into cell coordinates.
             Always returns a valid cell coordinate, even if the pixel position is outside the grid.
 
