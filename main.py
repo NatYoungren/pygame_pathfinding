@@ -1,3 +1,6 @@
+# Nathaniel Alden Homans Youngren
+# September 13, 2023
+
 import numpy as np
 import pygame as pg
 from a_star import A_Star_Portals
@@ -15,7 +18,7 @@ import display_vars as dv
 # 4. Press spacebar to start the simulation.
 #       (Continue to step with spacebar if manual control is enabled, toggle to manual with 'm' key)
 
-# 5. Press 'r' to reset the simulation, or escape to quit.
+# 5. Press 'r' to reset the pathfinding, or escape to quit. (Shift+'r' to reset fully)
 #       (Additional controls are listed below)
 
 
@@ -41,12 +44,14 @@ import display_vars as dv
 # 'h' -> Toggle heuristic mode manually
 
 # ' ' -> Start simulation, or step if manual control is enabled
-# 'r' -> Reset simulation
+# 'r' -> Reset pathfinding
+# 'R' -> Reset completely
 # ESC -> Quit
 
-# TODO: Add controls and color gradients for difficult terrain.
 
-
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#                   # GLOBAL SETUP: #                     #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Dict to track state information, avoids individual global variables or passing/returning many arguments.
 STATE_DICT =   {'manual_control': False,    # If true, manual control is enabled (If false, auto-step is enabled)
                 
@@ -64,7 +69,7 @@ STATE_DICT =   {'manual_control': False,    # If true, manual control is enabled
                 # Internal state vars
                 'running': True,            # Main loop control
                 'searching': False,         # Pathfinding loop control
-                'resetting': True,          # Reset pathfinding flag
+                'resetting': 2,             # Reset pathfinding flag (1 = pathfinding reset, 2 = full reset)
                 
                 'temp_portal': None,        # Temp var to store portal start position during portal creation
                 }
@@ -115,11 +120,17 @@ def main():
         if STATE_DICT['resetting']:
             print('\nResetting...\n')
             STATE_DICT['heuristic_test_index'] = 0
-            STATE_DICT['resetting'] = False
+            
+            if STATE_DICT['resetting'] == 1:
+                sim = copy_sim(sim, search=False)
+            elif STATE_DICT['resetting'] == 2:
+                sim = A_Star_Portals(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST, h_mode=HEURISTIC_MODE_TEST_ARGS[STATE_DICT['heuristic_test_index']])
+
+            STATE_DICT['resetting'] = 0
             STATE_DICT['searching'] = False
             STATE_DICT['temp_portal'] = None
-            sim = A_Star_Portals(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST, h_mode=HEURISTIC_MODE_TEST_ARGS[STATE_DICT['heuristic_test_index']])
-            
+
+        
         # Update window title
         pg.display.set_caption(f'A* Pathfinding: steps: {sim.step_count} ~ heuristic count: {sim.heuristic_count} ~ length: {sim.path_length}')
         
@@ -137,33 +148,12 @@ def main():
         pg.display.flip()
         
         
-        # TODO: Move into method/clean up
-        if sim.finished and STATE_DICT['heuristic_test_index'] < len(HEURISTIC_MODE_TEST_ARGS):
+        # If heuristic testing is enabled, cycle through all heuristic modes.
+        if STATE_DICT['test_heuristics'] and sim.finished and STATE_DICT['heuristic_test_index'] < len(HEURISTIC_MODE_TEST_ARGS)-1:
             
             # Initialize a new sim using the next heuristic mode
             STATE_DICT['heuristic_test_index'] += 1
-            if STATE_DICT['heuristic_test_index'] < len(HEURISTIC_MODE_TEST_ARGS):
-                sim = copy_sim(sim)
-
-
-def print_results(sim):
-    print(f'\n\tHeuristic mode: {HEURISTIC_MODE_TEST_ARGS[STATE_DICT["heuristic_test_index"]]}')
-    print(f' > Step Count: {sim.step_count}')
-    print(f' > Path Length: {sim.path_length}')
-    print(f' > Heuristic count: {sim.heuristic_count}')
-    print(f' > Traversed cells: {np.count_nonzero(sim.state_grid == -1)}')
-    print(f' > Searched cells: {np.count_nonzero(sim.state_grid != 0)}')
-    print(f' > Step time: {sim.step_time:.4f}')
-    print(f' > Average time per step: {(sim.step_time) / sim.step_count:.4f}\n')
-
-def copy_sim(sim):
-    newsim = A_Star_Portals(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST, h_mode=HEURISTIC_MODE_TEST_ARGS[STATE_DICT['heuristic_test_index']])
-    newsim.start_pos = sim.start_pos
-    newsim.end_pos = sim.end_pos
-    newsim.cost_grid = sim.cost_grid
-    newsim.portals = sim.portals
-    newsim.search_cell(sim.start_pos)
-    return newsim
+            sim = copy_sim(sim, search=True)
     
     
 def parse_events(sim: A_Star_Portals):
@@ -210,7 +200,9 @@ def parse_events(sim: A_Star_Portals):
             # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
             # R key resets the simulation at the beginning of the next main loop
             elif event.key == pg.K_r:
-                STATE_DICT['resetting'] = True
+                
+                STATE_DICT['resetting'] = 1
+                if event.mod == 1: STATE_DICT['resetting'] = 2
             
             # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
             # M key toggles manual control
@@ -310,24 +302,25 @@ def parse_events(sim: A_Star_Portals):
                     STATE_DICT['temp_portal'] = None # Reset the temp portal entrance
         
         
-        # TODO: Add realtime wall drawing, allow paths to be cut and altered?
-        if not STATE_DICT['searching'] and sim.start_pos is not None and sim.end_pos is not None: # Before searching, allow user to place walls
-            try:
-                clicks = pg.mouse.get_pressed()
-                if any(clicks):
-                    clicked_cell = get_cell(pg.mouse.get_pos())
+    # Adjust any moused-over cell costs if holding left or right click
+    #   Only allow cost changes before searching begins
+    if not STATE_DICT['searching'] and sim.start_pos is not None and sim.end_pos is not None:
+        try:
+            clicks = pg.mouse.get_pressed()
+            if any(clicks):
+                clicked_cell = get_cell(pg.mouse.get_pos())
 
-                    if clicked_cell == sim.start_pos or clicked_cell == sim.end_pos:
-                        continue
+                if clicked_cell == sim.start_pos or clicked_cell == sim.end_pos:
+                    pass
+                
+                elif clicks[0]: # Left click changes cell cost
+                    sim.cost_grid[clicked_cell[0], clicked_cell[1]] = STATE_DICT['cell_cost']
                     
-                    if clicks[0]: # Left click changes cell cost
-                        sim.cost_grid[clicked_cell[0], clicked_cell[1]] = STATE_DICT['cell_cost']
-                        
-                    elif clicks[2]: # Right click resets cell to default
-                        sim.cost_grid[clicked_cell[0], clicked_cell[1]] = DEFAULT_COST
+                elif clicks[2]: # Right click resets cell to default
+                    sim.cost_grid[clicked_cell[0], clicked_cell[1]] = DEFAULT_COST
 
-            except AttributeError:
-                pass
+        except AttributeError:
+            pass
     
     # Print results if the simulation is finished
     if step_count > 0 and sim.finished:
@@ -336,20 +329,19 @@ def parse_events(sim: A_Star_Portals):
 
 def draw_state(surf, sim):
     """ Draw the current state of the pathfinding simulation to the given surface.
-        Renders the contents of each cell, minimizing draw calls.
-        Portals are drawn as paired triangles, with direction indicating entrance/exit.
+            Renders the contents of each cell, minimizing draw calls at the expense of readability and checks-per-cell.
+            Portals are drawn as paired triangles, with direction indicating entrance/exit.
 
     Args:
         surf (pygame.Surface): Surface to draw to (presumably the screen).
         sim (A_Star_Portals): Simulation from which to get state information.
     """
     surf.fill(dv.BG_COLOR) # Used for grid lines between cells and empty border space.
-    
-    # This loop is optimized to reduce the number of draw calls to 1 per cell. (Excepting portals)
-    # This is at the expense of checks for each cell, and readability overall.
+
     
     triangle_inset_w, triangle_inset_h = CELL_W / 4, CELL_H / 4
     
+    # Draw the highest priority cell feature at each cell coordinate.
     for w in range(GRID_W):
         for h in range(GRID_H):
             # Top left corner of the cell
@@ -391,12 +383,13 @@ def draw_state(surf, sim):
                 
             # Draw empty/unsearched cells.
             else:
-                c = sim.cost_grid[w, h]
+                c = sim.cost_grid[w, h] # Apply a color gradient based on cell cost.
                 pg.draw.rect(surf, dv.COST_COLORS[c-1], rect_vars)
     
     # Draw portals as triangles, with direction indicating entrance/exit.
     for i, (p_entrance, p_exit) in enumerate(sim.portals.items()):
         if i > len(PORTAL_COLORS)-1: add_portal_color() # If a portal has no color, add one.
+        
         # Draw portal entrances.
         x, y = ORIGIN_X + CELL_W * p_entrance[0], ORIGIN_Y + CELL_H * p_entrance[1]
         pg.draw.polygon(surf, PORTAL_COLORS[i], ((x+triangle_inset_w, y+CELL_H-triangle_inset_h), (x+CELL_W-triangle_inset_w, y+CELL_H-triangle_inset_h), (x+int(CELL_W/2), y+triangle_inset_h)))
@@ -409,10 +402,12 @@ def draw_state(surf, sim):
     if STATE_DICT['temp_portal'] is not None:
         i = len(sim.portals)
         if i > len(PORTAL_COLORS)-1: add_portal_color() # If a portal has no color, add one.
-
+        
+        # Draw stored portal entrance.
         x, y = ORIGIN_X + CELL_W * STATE_DICT['temp_portal'][0], ORIGIN_Y + CELL_H * STATE_DICT['temp_portal'][1]
         pg.draw.polygon(surf, PORTAL_COLORS[i], ((x+triangle_inset_w, y+CELL_H-triangle_inset_h), (x+CELL_W-triangle_inset_w, y+CELL_H-triangle_inset_h), (x+int(CELL_W/2), y+triangle_inset_h)))
         
+        # Draw line from entrance to mouse position.
         mouse_pos = pg.mouse.get_pos()
         pg.draw.line(surf, PORTAL_COLORS[i], (x+int(CELL_W/2), y+int(CELL_H/2)), mouse_pos, 2)
 
@@ -486,6 +481,44 @@ def get_cell(pos):
     np.clip(pos[:1], 0, GRID_W-1, out=pos[:1])
     np.clip(pos[1:], 0, GRID_H-1, out=pos[1:])
     return tuple(pos.astype(int))
+
+
+def print_results(sim: A_Star_Portals):
+    """ Summarize the results of pathfinding.
+
+    Args:
+        sim (A_Star_Portals): Pathfinding simulation to summarize.
+    """
+    print(f'\n\tHeuristic mode: {HEURISTIC_MODE_TEST_ARGS[STATE_DICT["heuristic_test_index"]]}')
+    print(f' > Step Count: {sim.step_count}')
+    print(f' > Path Length: {sim.path_length}')
+    print(f' > Heuristic count: {sim.heuristic_count}')
+    print(f' > Traversed cells: {np.count_nonzero(sim.state_grid == -1)}')
+    print(f' > Searched cells: {np.count_nonzero(sim.state_grid != 0)}')
+    print(f' > Step time: {sim.step_time:.4f}')
+    print(f' > Average time per step: {(sim.step_time) / sim.step_count:.4f}\n')
+
+
+def copy_sim(sim: A_Star_Portals, search=False):
+    """ Duplicates simulation setup into a new simulation.
+            Retain start/end positions, cost grid, and portals.
+
+    Args:
+        sim (A_Star_Portals): Pathfinding simulation to duplicate.
+        
+    Returns:
+        A_Star_Portals: New simulation with the same setup as the given simulation.
+    """
+    newsim = A_Star_Portals(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST, h_mode=HEURISTIC_MODE_TEST_ARGS[STATE_DICT['heuristic_test_index']])
+    newsim.start_pos = sim.start_pos
+    newsim.end_pos = sim.end_pos
+    newsim.cost_grid = sim.cost_grid
+    newsim.portals = sim.portals
+    
+    if search and newsim.start_pos is not None and newsim.end_pos is not None:
+        newsim.search_cell(sim.start_pos)
+    return newsim
+
 
 if __name__ == '__main__':
     main()
