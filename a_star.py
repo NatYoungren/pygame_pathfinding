@@ -7,7 +7,7 @@ from time import time
 # NOTE: INSTRUCTIONS
 #
 # 1. Initialize the class with the desired grid size, start and end positions, and default cost.
-# 2. Set the cost of any impassable tiles to a negative value.
+# 2. Adjust the cost of traversing individual cells by modifying the cost_grid, negative values are considered impassable.
 # 3. If using portals, add them to the portals dict.
 # 4. Manually call search_cell() to seed a starting cell.
 # 5. Step() the simulation until a path is found or no more cells can be traversed.
@@ -36,17 +36,17 @@ class A_Star():
         # NOTE: Start position is not required, but is useful for visualizing the algorithm.
         self.start_pos, self.end_pos = start_pos, end_pos
         
-        # Distance multiplier of each tile, used to define terrain
+        # Distance multiplier of each cell, used to define terrain
         # Negative values are considered impassable
         # Lower cost cells will be contribute to shorter paths and be prioritized by the algorithm
         self.default_cost = default_cost
         
         # # #
-        self.state_grid = np.zeros((self.w, self.h), dtype=int)                             # Holds status of each tile, 0 = unsearched, 1 = searched, -1 = traversed
-        self.cost_grid = np.full((self.w, self.h), fill_value=self.default_cost, dtype=int) # Cost to travel through each tile, used to define terrain
-        self.h_grid = np.full((self.w, self.h), fill_value=np.iinfo(int).max, dtype=int)    # Heuristic distance from each tile to the end, (could be precomputed)
-        self.g_grid = np.full((self.w, self.h), fill_value=np.iinfo(int).max, dtype=int)    # Distance from start to each tile, based on shortest path found so far
-        self.p_grid = np.full((self.w, self.h, 2), fill_value=-1, dtype=int)                # Parent of each tile, used to reconstruct path. (stored as (x, y) coords)
+        self.state_grid = np.zeros((self.w, self.h), dtype=int)                             # Holds status of each cell, 0 = unsearched, 1 = searched, -1 = traversed
+        self.cost_grid = np.full((self.w, self.h), fill_value=self.default_cost, dtype=int) # Cost to travel through each cell, used to define terrain
+        self.h_grid = np.full((self.w, self.h), fill_value=np.iinfo(int).max, dtype=int)    # Heuristic distance from each cell to the end, (could be precomputed)
+        self.g_grid = np.full((self.w, self.h), fill_value=np.iinfo(int).max, dtype=int)    # Distance from start to each cell, based on shortest path found so far
+        self.p_grid = np.full((self.w, self.h, 2), fill_value=-1, dtype=int)                # Parent of each cell, used to reconstruct path. (stored as (x, y) coords)
         # # #
         
         self.step_count = 0      # Number of steps taken
