@@ -11,7 +11,7 @@ from time import time
 # 3. If using portals, add them to the portals dict.
 # 4. Manually call search_cell() to seed a starting cell.
 # 5. Step() the simulation until a path is found or no more cells can be traversed.
-# 6. Examine pathfinding results with reconstruct_path(), step_count, heuristic_count and path_length.
+# 6. Examine pathfinding results with reconstruct_path(), step_count, step_time, heuristic_count and path_length.
 #
 
 # TODO: Implement non-grid version of A* (i.e. for a continuous space or graph)
@@ -29,37 +29,39 @@ class A_Star():
                  start_pos:(int, int)=None, end_pos:(int, int)=None,
                  default_cost:int=1) -> None:
         
-        # Width and height of grid
-        self.w, self.h = w, h
-        
-        # Start and end positions
-        # NOTE: Start position is not required, but is useful for visualizing the algorithm.
-        self.start_pos, self.end_pos = start_pos, end_pos
-        
-        # Distance multiplier of each cell, used to define terrain
-        # Negative values are considered impassable
-        # Lower cost cells will be contribute to shorter paths and be prioritized by the algorithm
-        self.default_cost = default_cost
-        
-        # # #
+        # Pathfinding variables
+        self.w, self.h = w, h               # Width and height of grid
+        self.start_pos = start_pos          # Start position
+        self.end_pos = end_pos              # End position
+        self.default_cost = default_cost    # Default cost multiplier of moving through a cell
+                                            #   Negative cell costs are considered impassable
+                                            #   Lower cost cells contribute to a shorter overall path, and are prioritized
+
+        # Cell grids
         self.state_grid = np.zeros((self.w, self.h), dtype=int)                             # Holds status of each cell, 0 = unsearched, 1 = searched, -1 = traversed
         self.cost_grid = np.full((self.w, self.h), fill_value=self.default_cost, dtype=int) # Cost to travel through each cell, used to define terrain
         self.h_grid = np.full((self.w, self.h), fill_value=np.iinfo(int).max, dtype=int)    # Heuristic distance from each cell to the end, (could be precomputed)
         self.g_grid = np.full((self.w, self.h), fill_value=np.iinfo(int).max, dtype=int)    # Distance from start to each cell, based on shortest path found so far
         self.p_grid = np.full((self.w, self.h, 2), fill_value=-1, dtype=int)                # Parent of each cell, used to reconstruct path. (stored as (x, y) coords)
-        # # #
         
+        # Pathfinding stats
         self.step_count = 0      # Number of steps taken
         self.step_time = 0       # Cumulative time spent stepping
         self.heuristic_count = 0 # Number of times a distance heuristic has been calculated
         self.last_path = []      # List of cells traversed in the last step
         self.path_length = 0     # Length of the path found
-        self.finished = False    # Flag to indicate if the end has been traversed
         
         
     @property
     def f_grid(self):
+        # The sum of g and h for each cell, used to determine which cell to traverse next.
         return np.add(self.h_grid, self.g_grid)
+
+
+    @property
+    def finished(self):
+        # True if there is an end position and it has been traversed.
+        return self.end_pos is not None and self.state_grid[self.end_pos] == -1
 
 
     def step(self):
@@ -85,7 +87,7 @@ class A_Star():
         self.state_grid[next_pos] = -1                      # Mark cell as traversed
         
         self.step_count += 1                                # Increment step counter
-        self.finished = next_pos == self.end_pos            # Check if end has been reached
+        # self.finished = next_pos == self.end_pos            # Check if end has been reached
         self.last_path = self.reconstruct_path(next_pos)    # Reconstruct path to cell
         
         self.path_length = max(self.path_length, self.g_grid[next_pos]/10)  # Divide by 10 to remove the heuristic scalar
