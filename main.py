@@ -150,8 +150,11 @@ def main():
         # Update display
         pg.display.flip()
         
-        # If heuristic testing is enabled, cycle through all heuristic modes.
-        if STATE_DICT['test_heuristics'] and (sim.finished or sim.blocked) and STATE_DICT['heuristic_test_index'] < len(HEURISTIC_MODE_TEST_ARGS)-1:
+        # If heuristic testing is enabled, cycle through heuristic modes when the simulation finishes
+        if STATE_DICT['searching'] and \
+            STATE_DICT['test_heuristics'] and \
+                (sim.finished or sim.blocked) and \
+                    STATE_DICT['heuristic_test_index'] < len(HEURISTIC_MODE_TEST_ARGS)-1:
             
             # Initialize a new sim using the next heuristic mode
             STATE_DICT['heuristic_test_index'] += 1
@@ -431,15 +434,15 @@ def draw_mouse_text(surf, font, sim):
     clicked_cell = get_cell(mouse_pos)
     text_pos = np.add(mouse_pos, dv.TEXT_OFFSET)
 
-    if STATE_DICT['text_content'] == 0:
+    if STATE_DICT['text_content'] == 0: # Show cell coordinates
         text = f'{clicked_cell}'
         
-    elif STATE_DICT['text_content'] == 1:
+    elif STATE_DICT['text_content'] == 1: # Show cell cost/portal
         text = f'C({sim.cost_grid[clicked_cell]})'
         if clicked_cell in sim.portals:
             text += f'  P{sim.portals[clicked_cell]}'
         
-    elif STATE_DICT['text_content'] == 2:
+    elif STATE_DICT['text_content'] == 2: # Show cell G/H/F if they are not max
         text = ''
         g_val = sim.g_grid[clicked_cell]
         h_val = sim.h_grid[clicked_cell]
@@ -528,7 +531,7 @@ def copy_sim(sim: A_Star_Portals, search=False):
 
 
 def reset_sim(sim: A_Star_Portals, reset_type=2):
-    """ Reset the simulation, either partially or fully.
+    """ Return a new simulation, reset either partially or fully.
 
     Args:
         sim (A_Star_Portals): Simulation to copy setup from (if reset_type is 1).
@@ -537,7 +540,7 @@ def reset_sim(sim: A_Star_Portals, reset_type=2):
                                     Defaults to 2.
 
     Returns:
-        A_Star_Portals: _description_
+        A_Star_Portals: The new simulation.
     """
     if reset_type not in [1, 2]:
         print(f'\nInvalid reset type: {reset_type}. Skipping reset.\n')
