@@ -62,7 +62,13 @@ class A_Star():
     @property
     def finished(self):
         # True if there is an end position and it has been traversed.
+        # Does not check if the end position is reachable, only if it has been traversed.
         return self.end_pos is not None and self.state_grid[self.end_pos] == -1
+
+    @property
+    def blocked(self):
+        # True if there are no more cells to traverse and the end has not been found.
+        return not (any(self.state_grid.flatten() == 1) or self.finished)
 
 
     def step(self):
@@ -72,12 +78,12 @@ class A_Star():
             (int, int): Coordinate of cell traversed. None, if no more cells can be traversed.
         """
 
-        if self.finished:
+        if self.finished: # If we have reached the end, stop stepping.
             print('End has been found, no more steps will be taken.')
             return self.end_pos
         
-        if not any(self.state_grid.flatten() == 1):
-            print('No more positions to check.')
+        if self.blocked: # No searched cells to traverse.
+            if self.last_path: print('No more positions to check.')
             self.last_path = []
             return None                                     # NOTE: Could also return start_pos
         
