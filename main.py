@@ -50,8 +50,27 @@ import display_vars as dv
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-#                   # GLOBAL SETUP: #                     #
+#                        # SETUP: #                       #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# PATHFINDING VARS
+GRID_W, GRID_H = 25, 25     # Grid size
+DEFAULT_COST = 1            # Default cost of cells
+COST_DICT = {pg.K_0: -1,    # Dict mapping keypress to cell cost
+             pg.K_1: 1,
+             pg.K_2: 2,
+             pg.K_3: 3,
+             pg.K_4: 4,
+             pg.K_5: 5,
+             pg.K_6: 6,
+             pg.K_7: 7,
+             pg.K_8: 8,
+             pg.K_9: 9}
+
+# STEP SPEED VARS
+STEPS_PER_SECOND = 200       # Number of steps per second (if manual control is disabled)
+STEPS_PER_FRAME = 0         # Maximum steps per frame update (if < 1, no limit)
+
 # Dict to track state information, avoids individual global variables or passing/returning many arguments.
 STATE_DICT =   {'manual_control': False,    # If true, manual control is enabled (If false, auto-step is enabled)
                 
@@ -74,13 +93,6 @@ STATE_DICT =   {'manual_control': False,    # If true, manual control is enabled
                 'temp_portal': None,        # Temp var to store portal start position during portal creation
                 }
 
-# CONTROL VARS
-STEPS_PER_SECOND = 20       # Number of steps per second (if manual control is disabled)
-STEPS_PER_FRAME = 0         # Maximum steps per frame update (if < 1, no limit)
-
-# PATHFINDING VARS
-GRID_W, GRID_H = 25, 25     # Grid size
-DEFAULT_COST = 1            # Default cost of cells
 
 # TESTING VARS
 HEURISTIC_MODE_TEST_ARGS = ['standard', 'store_all', 'store_none', 'naive']
@@ -116,23 +128,14 @@ def main():
 
     # Main loop
     while STATE_DICT['running']:
-        # Reset the simulation if requested
+        
+        # Reset the simulation if flagged
         if STATE_DICT['resetting']:
-            print('\nResetting...\n')
-            STATE_DICT['heuristic_test_index'] = 0
-            
-            if STATE_DICT['resetting'] == 1:
-                sim = copy_sim(sim, search=False)
-            elif STATE_DICT['resetting'] == 2:
-                sim = A_Star_Portals(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST, h_mode=HEURISTIC_MODE_TEST_ARGS[STATE_DICT['heuristic_test_index']])
-
+            sim = reset_sim(sim, STATE_DICT['resetting'])
             STATE_DICT['resetting'] = 0
-            STATE_DICT['searching'] = False
-            STATE_DICT['temp_portal'] = None
-
         
         # Update window title
-        pg.display.set_caption(f'A* Pathfinding: steps: {sim.step_count} ~ heuristic count: {sim.heuristic_count} ~ length: {sim.path_length}')
+        pg.display.set_caption(f'A* Pathfinding [{sim.h_mode}]: steps: {sim.step_count} ~ heuristic count: {sim.heuristic_count} ~ length: {sim.path_length}')
         
         # Handle input events
         parse_events(sim)
@@ -147,9 +150,8 @@ def main():
         # Update display
         pg.display.flip()
         
-        
         # If heuristic testing is enabled, cycle through all heuristic modes.
-        if STATE_DICT['test_heuristics'] and sim.finished and STATE_DICT['heuristic_test_index'] < len(HEURISTIC_MODE_TEST_ARGS)-1:
+        if STATE_DICT['test_heuristics'] and (sim.finished or sim.blocked) and STATE_DICT['heuristic_test_index'] < len(HEURISTIC_MODE_TEST_ARGS)-1:
             
             # Initialize a new sim using the next heuristic mode
             STATE_DICT['heuristic_test_index'] += 1
@@ -222,7 +224,6 @@ def parse_events(sim: A_Star_Portals):
             elif event.key == pg.K_h and not STATE_DICT['test_heuristics']:
                 STATE_DICT['heuristic_test_index'] = (STATE_DICT['heuristic_test_index'] + 1) % len(HEURISTIC_MODE_TEST_ARGS)
                 sim.h_mode = HEURISTIC_MODE_TEST_ARGS[STATE_DICT['heuristic_test_index']]
-                print('Heuristic mode:', sim.h_mode)
             
             # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
             # 't' Key toggles text display
@@ -248,11 +249,9 @@ def parse_events(sim: A_Star_Portals):
                 print('Show search:', STATE_DICT['show_search'])
                 
             # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-            # 0-9 Keys set cell cost, 0 sets to -1 (walls)
-            elif event.key in [pg.K_0, pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9]:
-                i = [pg.K_0, pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9].index(event.key)
-                if i == 0: i = -1
-                STATE_DICT['cell_cost'] = i
+            # Check dict of predefined keys to determine cost change (default: 0-9 Keys set cell cost, 0 sets to -1 [walls])
+            elif event.key in COST_DICT:
+                STATE_DICT['cell_cost'] = COST_DICT[event.key]
                 print('Cell cost:', STATE_DICT['cell_cost'])
             
             # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -338,23 +337,22 @@ def draw_state(surf, sim):
     """
     surf.fill(dv.BG_COLOR) # Used for grid lines between cells and empty border space.
 
+    # # #
+    # Draw cell grid
     
-    triangle_inset_w, triangle_inset_h = CELL_W / 4, CELL_H / 4
+    # Width and height of each cell, minus the border width
+    width  = CELL_W - dv.BORDER_PX*2    
+    height = CELL_H - dv.BORDER_PX*2
     
     # Draw the highest priority cell feature at each cell coordinate.
     for w in range(GRID_W):
         for h in range(GRID_H):
-            # Top left corner of the cell
-            x, y = ORIGIN_X + CELL_W * w, ORIGIN_Y + CELL_H * h
-            
-            # Top left corner of the cell, offset by the border width
-            _x, _y = x + dv.BORDER_PX, y + dv.BORDER_PX
-            
-            # Width and height of the cell, minus the border width
-            width, height = CELL_W - dv.BORDER_PX*2, CELL_H - dv.BORDER_PX*2
-            
-            # Rect vars for drawing
-            rect_vars = (_x, _y, width, height)
+
+            x = ORIGIN_X + CELL_W * w           # Top left corner of the cell
+            y = ORIGIN_Y + CELL_H * h   
+            _x = x + dv.BORDER_PX               # Offset corner by border width
+            _y = y + dv.BORDER_PX       
+            rect_vars = (_x, _y, width, height) # Rect vars for pg.draw.rect
             
             # Draw the start position.
             if (w, h) == sim.start_pos:
@@ -375,16 +373,25 @@ def draw_state(surf, sim):
            
            # Draw searched cells.
             elif STATE_DICT['show_search'] and sim.state_grid[w, h] == 1:
-                pg.draw.rect(surf, dv.SEARCHED_COLORS[(h + w) % 2], rect_vars)
+                pg.draw.rect(surf, dv.SEARCHED_COLOR, rect_vars)
             
             # Draw traversed cells.
             elif STATE_DICT['show_search'] and sim.state_grid[w, h] == -1:
-                pg.draw.rect(surf, dv.TRAVERSED_COLORS[(h + w) % 2], rect_vars)
+                pg.draw.rect(surf, dv.TRAVERSED_COLOR, rect_vars)
                 
             # Draw empty/unsearched cells.
             else:
-                c = sim.cost_grid[w, h] # Apply a color gradient based on cell cost.
-                pg.draw.rect(surf, dv.COST_COLORS[c-1], rect_vars)
+                c = dv.CELL_COLOR # Default color
+                if sim.cost_grid[w, h] in list(COST_DICT.values()): # Override color based on cell cost.
+                    c = dv.COST_COLORS[list(COST_DICT.values()).index(sim.cost_grid[w, h]) - 1]
+                
+                pg.draw.rect(surf, c, rect_vars)
+    
+    # # #
+    # Draw portals
+    
+    # Width and height of the portal triangle inset
+    triangle_inset_w, triangle_inset_h = CELL_W / 4, CELL_H / 4
     
     # Draw portals as triangles, with direction indicating entrance/exit.
     for i, (p_entrance, p_exit) in enumerate(sim.portals.items()):
@@ -520,5 +527,33 @@ def copy_sim(sim: A_Star_Portals, search=False):
     return newsim
 
 
+def reset_sim(sim: A_Star_Portals, reset_type=2):
+    """ Reset the simulation, either partially or fully.
+
+    Args:
+        sim (A_Star_Portals): Simulation to copy setup from (if reset_type is 1).
+        reset_type (int, optional): If 1, retain start/end/cost_grid/portals from sim.
+                                    If 2, return a fresh sim.
+                                    Defaults to 2.
+
+    Returns:
+        A_Star_Portals: _description_
+    """
+    if reset_type not in [1, 2]:
+        print(f'\nInvalid reset type: {reset_type}. Skipping reset.\n')
+        return sim
+    
+    print('\nResetting...\n')
+    STATE_DICT['heuristic_test_index'] = 0
+    STATE_DICT['searching'] = False
+    STATE_DICT['temp_portal'] = None
+    
+    if STATE_DICT['resetting'] == 1: # Retain start/end/cost_grid/portals from the previous sim
+        return copy_sim(sim, search=False)
+        
+    elif STATE_DICT['resetting'] == 2: # Retain nothing from the previous sim
+        return A_Star_Portals(w=GRID_W, h=GRID_H, default_cost=DEFAULT_COST, h_mode=HEURISTIC_MODE_TEST_ARGS[STATE_DICT['heuristic_test_index']])
+    
+    
 if __name__ == '__main__':
     main()
