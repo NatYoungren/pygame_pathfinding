@@ -438,9 +438,9 @@ def draw_mouse_text(surf, font, sim):
         text = f'{clicked_cell}'
         
     elif STATE_DICT['text_content'] == 1: # Show cell cost/portal
-        text = f'C({sim.cost_grid[clicked_cell]})'
+        text = f'C({sim.cost_grid[clicked_cell]})  '
         if clicked_cell in sim.portals:
-            text += f'  P{sim.portals[clicked_cell]}'
+            text += f'P{sim.portals[clicked_cell]}'
         
     elif STATE_DICT['text_content'] == 2: # Show cell G/H/F if they are not max
         text = ''
@@ -448,11 +448,11 @@ def draw_mouse_text(surf, font, sim):
         h_val = sim.h_grid[clicked_cell]
         
         if g_val != np.iinfo(int).max:
-            text += f'G({g_val})'
+            text += f'G({g_val})  '
         if h_val != np.iinfo(int).max:
-            text += f'  H({h_val})'
+            text += f'H({h_val})  '
         if g_val != np.iinfo(int).max and h_val != np.iinfo(int).max:
-            text += f'  F({g_val + h_val})'
+            text += f'F({g_val + h_val})'
             
     draw_text(surf, text, text_pos, font, dv.TEXT_COLOR, dv.TEXT_ALPHA)
 
