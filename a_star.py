@@ -105,7 +105,7 @@ class A_Star():
 
     def select_next_pos(self):
         """ Selects most promising cell from viable searched cells.
-                > Searched cell -> lowest f -> lowest h
+                > Searched cells -> lowest f -> lowest h
                 > i.e. Searched but untraversed cell that may be on a shortest path and is closest to the end.
 
         Returns:
