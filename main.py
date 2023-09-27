@@ -205,9 +205,8 @@ def parse_events(sim: A_Star_Portals):
             # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
             # R key resets the simulation at the beginning of the next main loop
             elif event.key == pg.K_r:
-                
                 STATE_DICT['resetting'] = 1
-                if event.mod == 1: STATE_DICT['resetting'] = 2
+                if event.unicode == 'R': STATE_DICT['resetting'] = 2
             
             # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
             # M key toggles manual control
